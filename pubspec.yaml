@@ -1,0 +1,79 @@
+name: assetallocation
+description: "자산배분 헬퍼 - 포트폴리오 관리 앱"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.5.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management
+  flutter_riverpod: ^2.6.1
+
+  # Database
+  drift: ^2.20.3
+  drift_flutter: ^0.2.0
+  sqlite3_flutter_libs: ^0.5.0
+
+  # HTTP & Scraping
+  dio: ^5.7.0
+  html: ^0.15.4
+
+  # Charts
+  fl_chart: ^0.69.0
+
+  # Notifications
+  flutter_local_notifications: ^18.0.1
+  timezone: ^0.9.4
+
+  # Formatting
+  intl: ^0.20.1
+  google_fonts: ^6.2.1
+
+  # Navigation
+  go_router: ^14.0.0
+
+  # Permissions
+  permission_handler: ^11.3.0
+
+  # Storage
+  shared_preferences: ^2.3.2
+
+  # Ads
+  google_mobile_ads: ^5.1.0
+
+  # Backup / Restore
+  path_provider: ^2.1.5
+  share_plus: ^10.0.0
+  file_picker: ^8.1.7
+
+  # Code annotations (Freezed)
+  freezed_annotation: ^2.4.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+  # Code generation
+  build_runner: ^2.4.13
+  drift_dev: ^2.20.3
+  freezed: ^2.5.7
+
+  # App icon generation
+  flutter_launcher_icons: ^0.14.3
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon/icon.png"
+  min_sdk_android: 21
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/icon/

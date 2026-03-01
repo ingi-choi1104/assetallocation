@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"D:/Files/Flutter/assetallocation\" && flutter pub get 2>&1)",
+      "Bash(cd \"D:/Files/Flutter/assetallocation\" && flutter pub run build_runner build --delete-conflicting-outputs 2>&1)",
+      "Bash(cd \"D:/Files/Flutter/assetallocation\" && flutter analyze 2>&1)",
+      "Bash(cd /d/Files/Flutter/assetallocation && flutter analyze 2>&1)",
+      "Bash(cd /d/Files/Flutter/assetallocation && flutter pub get 2>&1)",
+      "Bash(cd /d/Files/Flutter/assetallocation && flutter build apk --debug 2>&1)",
+      "Bash(cd \"D:/Files/Flutter/assetallocation\" && flutter build apk --debug 2>&1)",
+      "Bash(curl:*)",
+      "Bash(flutter analyze:*)",
+      "Bash(flutter pub:*)",
+      "Bash(dart run:*)",
+      "Bash(ls:*)",
+      "Bash(grep:*)",
+      "WebSearch"
+    ]
+  }
+}

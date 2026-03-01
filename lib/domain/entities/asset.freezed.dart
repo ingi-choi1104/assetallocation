@@ -1,0 +1,311 @@
+// coverage:ignore-file
+// GENERATED CODE - DO NOT MODIFY BY HAND
+// ignore_for_file: type=lint
+// ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
+
+part of 'asset.dart';
+
+// **************************************************************************
+// FreezedGenerator
+// **************************************************************************
+
+T _$identity<T>(T value) => value;
+
+final _privateConstructorUsedError = UnsupportedError(
+    'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
+
+/// @nodoc
+mixin _$Asset {
+  int get id => throw _privateConstructorUsedError;
+  String get symbol => throw _privateConstructorUsedError;
+  String get name => throw _privateConstructorUsedError;
+  AssetType get assetType => throw _privateConstructorUsedError;
+  String get currency => throw _privateConstructorUsedError;
+  String? get fundCode => throw _privateConstructorUsedError;
+  double? get lastPrice => throw _privateConstructorUsedError;
+  DateTime? get lastPriceUpdatedAt => throw _privateConstructorUsedError;
+  DateTime get createdAt => throw _privateConstructorUsedError;
+
+  /// Create a copy of Asset
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $AssetCopyWith<Asset> get copyWith => throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $AssetCopyWith<$Res> {
+  factory $AssetCopyWith(Asset value, $Res Function(Asset) then) =
+      _$AssetCopyWithImpl<$Res, Asset>;
+  @useResult
+  $Res call(
+      {int id,
+      String symbol,
+      String name,
+      AssetType assetType,
+      String currency,
+      String? fundCode,
+      double? lastPrice,
+      DateTime? lastPriceUpdatedAt,
+      DateTime createdAt});
+}
+
+/// @nodoc
+class _$AssetCopyWithImpl<$Res, $Val extends Asset>
+    implements $AssetCopyWith<$Res> {
+  _$AssetCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of Asset
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? id = null,
+    Object? symbol = null,
+    Object? name = null,
+    Object? assetType = null,
+    Object? currency = null,
+    Object? fundCode = freezed,
+    Object? lastPrice = freezed,
+    Object? lastPriceUpdatedAt = freezed,
+    Object? createdAt = null,
+  }) {
+    return _then(_value.copyWith(
+      id: null == id
+          ? _value.id
+          : id // ignore: cast_nullable_to_non_nullable
+              as int,
+      symbol: null == symbol
+          ? _value.symbol
+          : symbol // ignore: cast_nullable_to_non_nullable
+              as String,
+      name: null == name
+          ? _value.name
+          : name // ignore: cast_nullable_to_non_nullable
+              as String,
+      assetType: null == assetType
+          ? _value.assetType
+          : assetType // ignore: cast_nullable_to_non_nullable
+              as AssetType,
+      currency: null == currency
+          ? _value.currency
+          : currency // ignore: cast_nullable_to_non_nullable
+              as String,
+      fundCode: freezed == fundCode
+          ? _value.fundCode
+          : fundCode // ignore: cast_nullable_to_non_nullable
+              as String?,
+      lastPrice: freezed == lastPrice
+          ? _value.lastPrice
+          : lastPrice // ignore: cast_nullable_to_non_nullable
+              as double?,
+      lastPriceUpdatedAt: freezed == lastPriceUpdatedAt
+          ? _value.lastPriceUpdatedAt
+          : lastPriceUpdatedAt // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
+      createdAt: null == createdAt
+          ? _value.createdAt
+          : createdAt // ignore: cast_nullable_to_non_nullable
+              as DateTime,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$AssetImplCopyWith<$Res> implements $AssetCopyWith<$Res> {
+  factory _$$AssetImplCopyWith(
+          _$AssetImpl value, $Res Function(_$AssetImpl) then) =
+      __$$AssetImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {int id,
+      String symbol,
+      String name,
+      AssetType assetType,
+      String currency,
+      String? fundCode,
+      double? lastPrice,
+      DateTime? lastPriceUpdatedAt,
+      DateTime createdAt});
+}
+
+/// @nodoc
+class __$$AssetImplCopyWithImpl<$Res>
+    extends _$AssetCopyWithImpl<$Res, _$AssetImpl>
+    implements _$$AssetImplCopyWith<$Res> {
+  __$$AssetImplCopyWithImpl(
+      _$AssetImpl _value, $Res Function(_$AssetImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of Asset
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? id = null,
+    Object? symbol = null,
+    Object? name = null,
+    Object? assetType = null,
+    Object? currency = null,
+    Object? fundCode = freezed,
+    Object? lastPrice = freezed,
+    Object? lastPriceUpdatedAt = freezed,
+    Object? createdAt = null,
+  }) {
+    return _then(_$AssetImpl(
+      id: null == id
+          ? _value.id
+          : id // ignore: cast_nullable_to_non_nullable
+              as int,
+      symbol: null == symbol
+          ? _value.symbol
+          : symbol // ignore: cast_nullable_to_non_nullable
+              as String,
+      name: null == name
+          ? _value.name
+          : name // ignore: cast_nullable_to_non_nullable
+              as String,
+      assetType: null == assetType
+          ? _value.assetType
+          : assetType // ignore: cast_nullable_to_non_nullable
+              as AssetType,
+      currency: null == currency
+          ? _value.currency
+          : currency // ignore: cast_nullable_to_non_nullable
+              as String,
+      fundCode: freezed == fundCode
+          ? _value.fundCode
+          : fundCode // ignore: cast_nullable_to_non_nullable
+              as String?,
+      lastPrice: freezed == lastPrice
+          ? _value.lastPrice
+          : lastPrice // ignore: cast_nullable_to_non_nullable
+              as double?,
+      lastPriceUpdatedAt: freezed == lastPriceUpdatedAt
+          ? _value.lastPriceUpdatedAt
+          : lastPriceUpdatedAt // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
+      createdAt: null == createdAt
+          ? _value.createdAt
+          : createdAt // ignore: cast_nullable_to_non_nullable
+              as DateTime,
+    ));
+  }
+}
+
+/// @nodoc
+
+class _$AssetImpl implements _Asset {
+  const _$AssetImpl(
+      {required this.id,
+      required this.symbol,
+      required this.name,
+      required this.assetType,
+      required this.currency,
+      this.fundCode,
+      this.lastPrice,
+      this.lastPriceUpdatedAt,
+      required this.createdAt});
+
+  @override
+  final int id;
+  @override
+  final String symbol;
+  @override
+  final String name;
+  @override
+  final AssetType assetType;
+  @override
+  final String currency;
+  @override
+  final String? fundCode;
+  @override
+  final double? lastPrice;
+  @override
+  final DateTime? lastPriceUpdatedAt;
+  @override
+  final DateTime createdAt;
+
+  @override
+  String toString() {
+    return 'Asset(id: $id, symbol: $symbol, name: $name, assetType: $assetType, currency: $currency, fundCode: $fundCode, lastPrice: $lastPrice, lastPriceUpdatedAt: $lastPriceUpdatedAt, createdAt: $createdAt)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$AssetImpl &&
+            (identical(other.id, id) || other.id == id) &&
+            (identical(other.symbol, symbol) || other.symbol == symbol) &&
+            (identical(other.name, name) || other.name == name) &&
+            (identical(other.assetType, assetType) ||
+                other.assetType == assetType) &&
+            (identical(other.currency, currency) ||
+                other.currency == currency) &&
+            (identical(other.fundCode, fundCode) ||
+                other.fundCode == fundCode) &&
+            (identical(other.lastPrice, lastPrice) ||
+                other.lastPrice == lastPrice) &&
+            (identical(other.lastPriceUpdatedAt, lastPriceUpdatedAt) ||
+                other.lastPriceUpdatedAt == lastPriceUpdatedAt) &&
+            (identical(other.createdAt, createdAt) ||
+                other.createdAt == createdAt));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, id, symbol, name, assetType,
+      currency, fundCode, lastPrice, lastPriceUpdatedAt, createdAt);
+
+  /// Create a copy of Asset
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$AssetImplCopyWith<_$AssetImpl> get copyWith =>
+      __$$AssetImplCopyWithImpl<_$AssetImpl>(this, _$identity);
+}
+
+abstract class _Asset implements Asset {
+  const factory _Asset(
+      {required final int id,
+      required final String symbol,
+      required final String name,
+      required final AssetType assetType,
+      required final String currency,
+      final String? fundCode,
+      final double? lastPrice,
+      final DateTime? lastPriceUpdatedAt,
+      required final DateTime createdAt}) = _$AssetImpl;
+
+  @override
+  int get id;
+  @override
+  String get symbol;
+  @override
+  String get name;
+  @override
+  AssetType get assetType;
+  @override
+  String get currency;
+  @override
+  String? get fundCode;
+  @override
+  double? get lastPrice;
+  @override
+  DateTime? get lastPriceUpdatedAt;
+  @override
+  DateTime get createdAt;
+
+  /// Create a copy of Asset
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$AssetImplCopyWith<_$AssetImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}

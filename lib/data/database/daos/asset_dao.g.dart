@@ -1,0 +1,8 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND
+
+part of 'asset_dao.dart';
+
+// ignore_for_file: type=lint
+mixin _$AssetDaoMixin on DatabaseAccessor<AppDatabase> {
+  $AssetsTable get assets => attachedDatabase.assets;
+}
