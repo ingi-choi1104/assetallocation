@@ -132,22 +132,25 @@ class _PortfolioDetailView extends ConsumerWidget {
           const SafeArea(top: false, child: BannerAdWidget()),
         ],
       ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          FloatingActionButton.small(
-            heroTag: 'investment',
-            onPressed: () => _showInvestmentSheet(context, portfolio.id),
-            child: const Icon(Icons.attach_money),
-          ),
-          const SizedBox(height: 8),
-          FloatingActionButton(
-            heroTag: 'addAsset',
-            onPressed: () =>
-                context.push('/portfolio/${portfolio.id}/add-asset'),
-            child: const Icon(Icons.add),
-          ),
-        ],
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 52),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FloatingActionButton.small(
+              heroTag: 'investment',
+              onPressed: () => _showInvestmentSheet(context, portfolio.id),
+              child: const Icon(Icons.attach_money),
+            ),
+            const SizedBox(height: 8),
+            FloatingActionButton(
+              heroTag: 'addAsset',
+              onPressed: () =>
+                  context.push('/portfolio/${portfolio.id}/add-asset'),
+              child: const Icon(Icons.add),
+            ),
+          ],
+        ),
       ),
     );
   }

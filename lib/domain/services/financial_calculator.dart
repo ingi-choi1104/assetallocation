@@ -32,6 +32,7 @@ class PortfolioMetrics {
 class RebalancingGap {
   final int assetId;
   final String assetName;
+  final String symbol; // ticker/code (e.g. '005930' for Samsung)
   final double currentWeight;
   final double targetWeight;
   final double gap;
@@ -45,6 +46,7 @@ class RebalancingGap {
   const RebalancingGap({
     required this.assetId,
     required this.assetName,
+    this.symbol = '',
     required this.currentWeight,
     required this.targetWeight,
     required this.gap,
@@ -167,6 +169,7 @@ class FinancialCalculator {
     Map<int, double> holdingsMap = const {},
     Map<int, String> currencies = const {},
     Map<int, String> assetTypes = const {},
+    Map<int, String> symbols = const {},
   }) {
     final totalValue =
         currentValues.values.fold(0.0, (sum, v) => sum + v);
@@ -182,6 +185,7 @@ class FinancialCalculator {
       gaps.add(RebalancingGap(
         assetId: assetId,
         assetName: assetNames[assetId] ?? 'Unknown',
+        symbol: symbols[assetId] ?? '',
         currentWeight: currentWeight,
         targetWeight: target,
         gap: currentWeight - target,

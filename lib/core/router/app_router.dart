@@ -12,6 +12,8 @@ import '../../presentation/screens/settings/settings_screen.dart';
 import '../../presentation/screens/dynamic_allocation/strategy_selection_screen.dart';
 import '../../presentation/screens/dynamic_allocation/strategy_result_screen.dart';
 import '../../presentation/screens/portfolio_bundle/portfolio_bundle_screen.dart';
+import '../../presentation/screens/snapshot/snapshot_list_screen.dart';
+import '../../presentation/screens/snapshot/snapshot_detail_screen.dart';
 import '../../domain/entities/dynamic_allocation.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -25,6 +27,16 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/snapshots',
+        builder: (context, state) => const SnapshotListScreen(),
+      ),
+      GoRoute(
+        path: '/snapshots/:id',
+        builder: (context, state) => SnapshotDetailScreen(
+          snapshotId: int.parse(state.pathParameters['id']!),
+        ),
       ),
       GoRoute(
         path: '/bundle/:id',

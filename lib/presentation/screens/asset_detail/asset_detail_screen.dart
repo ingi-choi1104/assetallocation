@@ -72,7 +72,12 @@ class _AssetDetailView extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(asset?.symbol ?? 'Unknown'),
+        title: Text(
+          asset != null && asset.name.isNotEmpty
+              ? '${asset.name}(${asset.symbol})'
+              : asset?.symbol ?? 'Unknown',
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: [
           PopupMenuButton<String>(
             onSelected: (v) async {
@@ -153,11 +158,14 @@ class _AssetDetailView extends ConsumerWidget {
           const SafeArea(top: false, child: BannerAdWidget()),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push(
-            '/portfolio/$portfolioId/asset/${portfolioAsset.id}/transaction'),
-        icon: const Icon(Icons.add),
-        label: const Text('거래 추가'),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 52),
+        child: FloatingActionButton.extended(
+          onPressed: () => context.push(
+              '/portfolio/$portfolioId/asset/${portfolioAsset.id}/transaction'),
+          icon: const Icon(Icons.add),
+          label: const Text('거래 추가'),
+        ),
       ),
     );
   }

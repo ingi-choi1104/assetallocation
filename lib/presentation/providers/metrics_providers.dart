@@ -110,6 +110,7 @@ final portfolioWeightsProvider =
   final currentValues = <int, double>{};
   final targetWeights = <int, double>{};
   final assetNames = <int, String>{};
+  final assetSymbols = <int, String>{};
   final pricesPerUnit = <int, double>{};
   final holdingsMap = <int, double>{};
   final currencies = <int, String>{};
@@ -138,6 +139,7 @@ final portfolioWeightsProvider =
     currentValues[pa.assetId] = isUsd ? nativeValue * rate : nativeValue;
     targetWeights[pa.assetId] = pa.targetWeight;
     assetNames[pa.assetId] = pa.asset?.name ?? pa.assetId.toString();
+    assetSymbols[pa.assetId] = pa.asset?.symbol ?? '';
     pricesPerUnit[pa.assetId] = currentPrice;
     holdingsMap[pa.assetId] = holdings;
     currencies[pa.assetId] = currency;
@@ -152,6 +154,7 @@ final portfolioWeightsProvider =
     holdingsMap: holdingsMap,
     currencies: currencies,
     assetTypes: assetTypes,
+    symbols: assetSymbols,
   );
 });
 

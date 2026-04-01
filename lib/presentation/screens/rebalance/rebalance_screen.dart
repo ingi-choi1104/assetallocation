@@ -125,10 +125,23 @@ class _GapTile extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: Text(
-                    gap.assetName,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                    overflow: TextOverflow.ellipsis,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        gap.assetName,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (gap.assetType == 'krStock' && gap.symbol.isNotEmpty)
+                        Text(
+                          gap.symbol,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade500,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 const SizedBox(width: 8),

@@ -10,6 +10,9 @@ class DynamicPriceDataSource {
 
   /// Fetch [months] months of monthly price data for all [symbols],
   /// ending at [endDate].  Results are returned sorted ascending by date.
+  ///
+  /// Fetches with throttled concurrency (max 4 parallel) to avoid
+  /// flooding network/memory and keep the UI responsive.
   Future<Map<String, List<MonthlyBar>>> fetchMonthlyPrices(
     List<String> symbols,
     DateTime endDate, {
@@ -17,13 +20,18 @@ class DynamicPriceDataSource {
   }) async {
     // Remove duplicates while preserving order
     final unique = symbols.toSet().toList();
-    final results = await Future.wait(
-      unique.map((s) => _fetchSymbol(s, endDate, months)),
-    );
+
+    // Throttled parallel fetch — max 4 at a time
     final map = <String, List<MonthlyBar>>{};
-    for (int i = 0; i < unique.length; i++) {
-      if (results[i] != null && results[i]!.isNotEmpty) {
-        map[unique[i]] = results[i]!;
+    for (int i = 0; i < unique.length; i += 4) {
+      final chunk = unique.skip(i).take(4).toList();
+      final results = await Future.wait(
+        chunk.map((s) => _fetchSymbol(s, endDate, months)),
+      );
+      for (int j = 0; j < chunk.length; j++) {
+        if (results[j] != null && results[j]!.isNotEmpty) {
+          map[chunk[j]] = results[j]!;
+        }
       }
     }
     return map;

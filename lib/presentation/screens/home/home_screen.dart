@@ -121,6 +121,11 @@ class _PortfolioListTab extends ConsumerWidget {
           _CurrencyToggleChips(),
           const SizedBox(width: 8),
           IconButton(
+            icon: const Icon(Icons.camera_alt_outlined),
+            tooltip: '스냅샷',
+            onPressed: () => context.push('/snapshots'),
+          ),
+          IconButton(
             icon: const Icon(Icons.sort),
             tooltip: '순서 편집',
             onPressed: () {

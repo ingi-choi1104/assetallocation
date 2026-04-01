@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../../domain/entities/price_point.dart';
 import '../../domain/enums/asset_type.dart';
 import '../../domain/repositories/price_repository.dart';
@@ -193,36 +195,64 @@ class PriceRepositoryImpl implements PriceRepository {
       }
     }
 
-    await Future.wait(otherAssets.map((asset) async {
-      try {
-        final price = await fetchCurrentPrice(asset.id);
-        if (price != null) {
-          await _db.priceHistoryDao.insertOrReplace(
-            PriceHistoryCompanion.insert(
-              assetId: asset.id,
-              closePrice: price,
-              date: DateTime.now(),
-            ),
-          );
-        }
-      } catch (_) {}
-    }));
+    // Throttled parallel fetch — max 3 concurrent HTTP requests
+    // to avoid flooding network/memory while keeping UI responsive.
+    await _throttledFetch(otherAssets, maxConcurrent: 3);
 
+    // Crypto: sequential with rate-limit delays (CoinGecko)
     for (final asset in cryptoAssets) {
-      try {
-        final price = await fetchCurrentPrice(asset.id);
-        if (price != null) {
-          await _db.priceHistoryDao.insertOrReplace(
-            PriceHistoryCompanion.insert(
-              assetId: asset.id,
-              closePrice: price,
-              date: DateTime.now(),
-            ),
-          );
-        }
-      } catch (_) {}
+      await _fetchAndStore(asset);
     }
 
     await _settings.setLastSyncTime(DateTime.now());
+  }
+
+  /// Fetches prices for [assets] with at most [maxConcurrent] in-flight requests.
+  Future<void> _throttledFetch(
+    List<AssetRecord> assets, {
+    required int maxConcurrent,
+  }) async {
+    if (assets.isEmpty) return;
+
+    int running = 0;
+    int nextIndex = 0;
+    final completer = Completer<void>();
+
+    void startNext() {
+      while (running < maxConcurrent && nextIndex < assets.length) {
+        final asset = assets[nextIndex++];
+        running++;
+        _fetchAndStore(asset).whenComplete(() {
+          running--;
+          if (nextIndex < assets.length) {
+            startNext();
+          } else if (running == 0) {
+            completer.complete();
+          }
+        });
+      }
+    }
+
+    startNext();
+    // If the list was empty or instantly done
+    if (assets.isEmpty || (running == 0 && nextIndex >= assets.length)) {
+      return;
+    }
+    return completer.future;
+  }
+
+  Future<void> _fetchAndStore(AssetRecord asset) async {
+    try {
+      final price = await fetchCurrentPrice(asset.id);
+      if (price != null) {
+        await _db.priceHistoryDao.insertOrReplace(
+          PriceHistoryCompanion.insert(
+            assetId: asset.id,
+            closePrice: price,
+            date: DateTime.now(),
+          ),
+        );
+      }
+    } catch (_) {}
   }
 }
