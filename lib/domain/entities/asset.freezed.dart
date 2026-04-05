@@ -23,6 +23,7 @@ mixin _$Asset {
   String get currency => throw _privateConstructorUsedError;
   String? get fundCode => throw _privateConstructorUsedError;
   double? get lastPrice => throw _privateConstructorUsedError;
+  double? get lastPreviousClose => throw _privateConstructorUsedError;
   DateTime? get lastPriceUpdatedAt => throw _privateConstructorUsedError;
   DateTime get createdAt => throw _privateConstructorUsedError;
 
@@ -45,6 +46,7 @@ abstract class $AssetCopyWith<$Res> {
       String currency,
       String? fundCode,
       double? lastPrice,
+      double? lastPreviousClose,
       DateTime? lastPriceUpdatedAt,
       DateTime createdAt});
 }
@@ -71,6 +73,7 @@ class _$AssetCopyWithImpl<$Res, $Val extends Asset>
     Object? currency = null,
     Object? fundCode = freezed,
     Object? lastPrice = freezed,
+    Object? lastPreviousClose = freezed,
     Object? lastPriceUpdatedAt = freezed,
     Object? createdAt = null,
   }) {
@@ -103,6 +106,10 @@ class _$AssetCopyWithImpl<$Res, $Val extends Asset>
           ? _value.lastPrice
           : lastPrice // ignore: cast_nullable_to_non_nullable
               as double?,
+      lastPreviousClose: freezed == lastPreviousClose
+          ? _value.lastPreviousClose
+          : lastPreviousClose // ignore: cast_nullable_to_non_nullable
+              as double?,
       lastPriceUpdatedAt: freezed == lastPriceUpdatedAt
           ? _value.lastPriceUpdatedAt
           : lastPriceUpdatedAt // ignore: cast_nullable_to_non_nullable
@@ -130,6 +137,7 @@ abstract class _$$AssetImplCopyWith<$Res> implements $AssetCopyWith<$Res> {
       String currency,
       String? fundCode,
       double? lastPrice,
+      double? lastPreviousClose,
       DateTime? lastPriceUpdatedAt,
       DateTime createdAt});
 }
@@ -154,6 +162,7 @@ class __$$AssetImplCopyWithImpl<$Res>
     Object? currency = null,
     Object? fundCode = freezed,
     Object? lastPrice = freezed,
+    Object? lastPreviousClose = freezed,
     Object? lastPriceUpdatedAt = freezed,
     Object? createdAt = null,
   }) {
@@ -186,6 +195,10 @@ class __$$AssetImplCopyWithImpl<$Res>
           ? _value.lastPrice
           : lastPrice // ignore: cast_nullable_to_non_nullable
               as double?,
+      lastPreviousClose: freezed == lastPreviousClose
+          ? _value.lastPreviousClose
+          : lastPreviousClose // ignore: cast_nullable_to_non_nullable
+              as double?,
       lastPriceUpdatedAt: freezed == lastPriceUpdatedAt
           ? _value.lastPriceUpdatedAt
           : lastPriceUpdatedAt // ignore: cast_nullable_to_non_nullable
@@ -209,6 +222,7 @@ class _$AssetImpl implements _Asset {
       required this.currency,
       this.fundCode,
       this.lastPrice,
+      this.lastPreviousClose,
       this.lastPriceUpdatedAt,
       required this.createdAt});
 
@@ -227,13 +241,15 @@ class _$AssetImpl implements _Asset {
   @override
   final double? lastPrice;
   @override
+  final double? lastPreviousClose;
+  @override
   final DateTime? lastPriceUpdatedAt;
   @override
   final DateTime createdAt;
 
   @override
   String toString() {
-    return 'Asset(id: $id, symbol: $symbol, name: $name, assetType: $assetType, currency: $currency, fundCode: $fundCode, lastPrice: $lastPrice, lastPriceUpdatedAt: $lastPriceUpdatedAt, createdAt: $createdAt)';
+    return 'Asset(id: $id, symbol: $symbol, name: $name, assetType: $assetType, currency: $currency, fundCode: $fundCode, lastPrice: $lastPrice, lastPreviousClose: $lastPreviousClose, lastPriceUpdatedAt: $lastPriceUpdatedAt, createdAt: $createdAt)';
   }
 
   @override
@@ -252,6 +268,8 @@ class _$AssetImpl implements _Asset {
                 other.fundCode == fundCode) &&
             (identical(other.lastPrice, lastPrice) ||
                 other.lastPrice == lastPrice) &&
+            (identical(other.lastPreviousClose, lastPreviousClose) ||
+                other.lastPreviousClose == lastPreviousClose) &&
             (identical(other.lastPriceUpdatedAt, lastPriceUpdatedAt) ||
                 other.lastPriceUpdatedAt == lastPriceUpdatedAt) &&
             (identical(other.createdAt, createdAt) ||
@@ -259,8 +277,18 @@ class _$AssetImpl implements _Asset {
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, id, symbol, name, assetType,
-      currency, fundCode, lastPrice, lastPriceUpdatedAt, createdAt);
+  int get hashCode => Object.hash(
+      runtimeType,
+      id,
+      symbol,
+      name,
+      assetType,
+      currency,
+      fundCode,
+      lastPrice,
+      lastPreviousClose,
+      lastPriceUpdatedAt,
+      createdAt);
 
   /// Create a copy of Asset
   /// with the given fields replaced by the non-null parameter values.
@@ -280,6 +308,7 @@ abstract class _Asset implements Asset {
       required final String currency,
       final String? fundCode,
       final double? lastPrice,
+      final double? lastPreviousClose,
       final DateTime? lastPriceUpdatedAt,
       required final DateTime createdAt}) = _$AssetImpl;
 
@@ -297,6 +326,8 @@ abstract class _Asset implements Asset {
   String? get fundCode;
   @override
   double? get lastPrice;
+  @override
+  double? get lastPreviousClose;
   @override
   DateTime? get lastPriceUpdatedAt;
   @override

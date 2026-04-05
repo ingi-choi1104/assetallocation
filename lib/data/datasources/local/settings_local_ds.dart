@@ -92,4 +92,11 @@ class SettingsLocalDataSource {
   }
   Future<void> setExcludedBundles(List<int> ids) =>
       _prefs.setString(_excludedBundles, ids.join(','));
+
+  // Economic indicators collapsed state
+  static const _indicatorsCollapsed = 'indicators_collapsed';
+  bool getIndicatorsCollapsed() =>
+      _prefs.getBool(_indicatorsCollapsed) ?? false;
+  Future<void> setIndicatorsCollapsed(bool v) =>
+      _prefs.setBool(_indicatorsCollapsed, v);
 }

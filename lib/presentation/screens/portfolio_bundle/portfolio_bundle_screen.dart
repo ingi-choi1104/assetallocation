@@ -139,21 +139,67 @@ class _BundleContentState extends ConsumerState<_BundleContent> {
       ),
       body: members.isEmpty
           ? const Center(child: Text('포트폴리오가 없습니다'))
-          : ListView(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              children: [
-                _BundleSummaryCard(
-                  portfolioIds: widget.bundle.portfolioIds,
+          : CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: _BundleSummaryCard(
+                    portfolioIds: widget.bundle.portfolioIds,
+                  ),
                 ),
-                ...members.map((portfolio) => _BundleMemberCard(
-                      portfolio: portfolio!,
-                      onRemove: () => _confirmRemove(
-                          context, portfolio.name, portfolio.id),
-                      onTap: () =>
-                          context.push('/portfolio/${portfolio.id}'),
-                    )),
-                const Center(child: BannerAdWidget()),
-                const SizedBox(height: 16),
+                // 드래그 힌트
+                if (members.length >= 2)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline,
+                              size: 13, color: Colors.grey.shade500),
+                          const SizedBox(width: 6),
+                          Text(
+                            '길게 눌러 드래그하면 순서를 바꿀 수 있어요',
+                            style: TextStyle(
+                                fontSize: 11, color: Colors.grey.shade500),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                SliverReorderableList(
+                  itemCount: members.length,
+                  onReorder: (oldIndex, newIndex) {
+                    final ids = members.map((p) => p!.id).toList();
+                    if (newIndex > oldIndex) newIndex--;
+                    final item = ids.removeAt(oldIndex);
+                    ids.insert(newIndex, item);
+                    ref
+                        .read(portfolioBundleNotifierProvider.notifier)
+                        .reorderBundle(bundleId, ids);
+                  },
+                  itemBuilder: (context, index) {
+                    final portfolio = members[index]!;
+                    return ReorderableDelayedDragStartListener(
+                      key: ValueKey(portfolio.id),
+                      index: index,
+                      child: _BundleMemberCard(
+                        portfolio: portfolio,
+                        onRemove: () => _confirmRemove(
+                            context, portfolio.name, portfolio.id),
+                        onTap: () =>
+                            context.push('/portfolio/${portfolio.id}'),
+                      ),
+                    );
+                  },
+                ),
+                SliverToBoxAdapter(
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 8),
+                      const Center(child: BannerAdWidget()),
+                      const SizedBox(height: 16),
+                    ],
+                  ),
+                ),
               ],
             ),
     );

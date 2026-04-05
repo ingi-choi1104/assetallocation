@@ -54,6 +54,26 @@ class PriceRepositoryImpl implements PriceRepository {
   /// Returns cached price change info for an asset
   PriceChangeInfo? getPriceChange(int assetId) => _priceChangeCache[assetId];
 
+  /// Loads cached prices and previousClose from DB into in-memory cache.
+  /// Call once on app startup so daily change is available immediately.
+  Future<void> initializePriceCache() async {
+    final assets = await _db.assetDao.getAll();
+    for (final asset in assets) {
+      if (asset.lastPrice == null) continue;
+      final price = asset.lastPrice!;
+      final prevClose = asset.lastPreviousClose;
+      double? changePercent;
+      if (prevClose != null && prevClose > 0) {
+        changePercent = (price - prevClose) / prevClose * 100;
+      }
+      _priceChangeCache[asset.id] = PriceChangeInfo(
+        currentPrice: price,
+        previousClose: prevClose,
+        changePercent: changePercent,
+      );
+    }
+  }
+
   @override
   Future<List<PricePoint>> getPriceHistory(int assetId, {int days = 365}) async {
     final rows = await _db.priceHistoryDao.getByAsset(assetId, days: days);
@@ -108,7 +128,7 @@ class PriceRepositoryImpl implements PriceRepository {
           price = quote?.price;
           previousClose = quote?.previousClose;
         case AssetType.gold:
-          final quote = await _yahoo.fetchCurrentPrice('GC=F');
+          final quote = await _yahoo.fetchCurrentPrice('XAUUSD=X');
           if (quote != null) {
             price = quote.price / _troyOzPerGram;
             if (quote.previousClose != null) {
@@ -153,13 +173,13 @@ class PriceRepositoryImpl implements PriceRepository {
           changePercent = 0.0;
       }
 
-      // Cache price change info
+      // Persist price and previousClose to DB, update in-memory cache
       if (price != null) {
-        await _db.assetDao.updateLastPrice(assetId, price);
-
         if (previousClose != null && previousClose > 0) {
           changePercent ??= (price - previousClose) / previousClose * 100;
         }
+        await _db.assetDao.updateLastPriceAndPreviousClose(
+            assetId, price, previousClose);
         _priceChangeCache[assetId] = PriceChangeInfo(
           currentPrice: price,
           previousClose: previousClose,

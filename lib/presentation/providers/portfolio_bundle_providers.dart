@@ -65,6 +65,15 @@ class PortfolioBundleNotifier extends StateNotifier<List<PortfolioBundle>> {
     await _ds.saveBundles(state);
   }
 
+  /// Reorder portfolios within a bundle.
+  Future<void> reorderBundle(int bundleId, List<int> newPortfolioIds) async {
+    state = state.map((b) {
+      if (b.id == bundleId) return b.copyWith(portfolioIds: newPortfolioIds);
+      return b;
+    }).toList();
+    await _ds.saveBundles(state);
+  }
+
   /// Rename a bundle.
   Future<void> renameBundle(int bundleId, String name) async {
     state = state.map((b) {

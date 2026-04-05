@@ -9,6 +9,7 @@ class Assets extends Table {
   TextColumn get currency => text()();
   TextColumn get fundCode => text().nullable()();
   RealColumn get lastPrice => real().nullable()();
+  RealColumn get lastPreviousClose => real().nullable()();
   DateTimeColumn get lastPriceUpdatedAt => dateTime().nullable()();
   DateTimeColumn get createdAt =>
       dateTime().withDefault(currentDateAndTime)();

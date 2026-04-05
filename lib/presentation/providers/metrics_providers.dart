@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/enums/asset_type.dart';
 import '../../domain/services/financial_calculator.dart';
 import 'asset_providers.dart';
+import 'background_refresh_provider.dart';
 import 'database_providers.dart';
 import 'investment_providers.dart';
 import 'portfolio_bundle_providers.dart';
@@ -9,31 +10,26 @@ import 'portfolio_providers.dart';
 import 'price_providers.dart';
 import 'transaction_providers.dart';
 
-/// Fetches prices for all assets in a portfolio ONCE.
-/// Shared by portfolioMetricsProvider and portfolioWeightsProvider so that
-/// both providers use the same fetch results — eliminating duplicate API calls
-/// and non-deterministic _priceChangeCache overwrites that caused intermittent
-/// daily-change failures.
+/// Returns current prices for all assets in a portfolio.
+/// On startup: uses cached lastPrice from DB — instant, no network call.
+/// After background refresh: live price overrides update this automatically.
+/// Reactive: rebuilds whenever livePriceOverrideProvider updates.
 final portfolioPricesProvider =
     FutureProvider.family<Map<int, double>, int>((ref, portfolioId) async {
   final portfolioAssets =
       await ref.watch(portfolioAssetsStreamProvider(portfolioId).future);
-  final priceRepo = ref.watch(priceRepositoryProvider);
+  // Watch live overrides — rebuilds this provider when background prices arrive
+  final liveOverrides = ref.watch(livePriceOverrideProvider);
 
-  final priceFutures = portfolioAssets.map((pa) async {
-    // Cash assets are always 1.0 — skip network call
+  return Map.fromEntries(portfolioAssets.map((pa) {
     if (pa.asset?.assetType == AssetType.cash) {
       return MapEntry(pa.assetId, 1.0);
     }
-    try {
-      final p = await priceRepo.fetchCurrentPrice(pa.assetId);
-      return MapEntry(pa.assetId, p ?? pa.asset?.lastPrice ?? 0.0);
-    } catch (_) {
-      return MapEntry(pa.assetId, pa.asset?.lastPrice ?? 0.0);
-    }
-  });
-  final entries = await Future.wait(priceFutures);
-  return Map.fromEntries(entries);
+    // Live price from background refresh takes precedence over cached DB price
+    final livePrice = liveOverrides[pa.assetId];
+    final cachedPrice = pa.asset?.lastPrice ?? 0.0;
+    return MapEntry(pa.assetId, livePrice ?? cachedPrice);
+  }));
 });
 
 /// Computes metrics for a single portfolio.

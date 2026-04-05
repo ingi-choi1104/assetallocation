@@ -3,7 +3,7 @@ enum AssetType {
   krStock('krStock', '한국 주식/ETF'),
   crypto('crypto', '암호화폐'),
   krFund('krFund', '한국 펀드'),
-  gold('gold', '현물'),
+  gold('gold', '금 현물'),
   cash('cash', '현금');
 
   final String value;

@@ -8,9 +8,12 @@ import '../../../services/backup_service.dart';
 import '../../providers/database_providers.dart';
 import '../../providers/price_providers.dart';
 import '../../providers/settings_providers.dart';
+import '../../widgets/tutorial_overlay.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
-  const SettingsScreen({super.key});
+  final VoidCallback? onShowTutorial;
+  final GlobalKey? backupSectionKey;
+  const SettingsScreen({super.key, this.onShowTutorial, this.backupSectionKey});
 
   @override
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
@@ -246,18 +249,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
           const Divider(),
 
-          _SectionHeader('데이터 백업 / 복원'),
-          ListTile(
-            leading: const Icon(Icons.upload_file),
-            title: const Text('데이터 내보내기'),
-            subtitle: const Text('포트폴리오·거래 내역을 JSON 파일로 저장'),
-            onTap: () => _exportBackup(context),
-          ),
-          ListTile(
-            leading: const Icon(Icons.download_for_offline_outlined),
-            title: const Text('데이터 가져오기'),
-            subtitle: const Text('백업 JSON 파일을 선택하면 기존 데이터를 대체합니다'),
-            onTap: () => _importBackup(context),
+          Column(
+            key: widget.backupSectionKey,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _SectionHeader('데이터 백업 / 복원'),
+              ListTile(
+                leading: const Icon(Icons.upload_file),
+                title: const Text('데이터 내보내기'),
+                subtitle: const Text('포트폴리오·거래 내역을 JSON 파일로 저장'),
+                onTap: () => _exportBackup(context),
+              ),
+              ListTile(
+                leading: const Icon(Icons.download_for_offline_outlined),
+                title: const Text('데이터 가져오기'),
+                subtitle: const Text('백업 JSON 파일을 선택하면 기존 데이터를 대체합니다'),
+                onTap: () => _importBackup(context),
+              ),
+            ],
           ),
 
           const Divider(),
@@ -310,6 +319,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             title: Text('데이터 소스'),
             subtitle: Text(
                 'Yahoo Finance · Naver Finance · CoinGecko · FSS'),
+          ),
+
+          const Divider(),
+
+          _SectionHeader('도움말'),
+          ListTile(
+            leading: const Icon(Icons.menu_book_outlined),
+            title: const Text('사용법 안내 다시 보기'),
+            subtitle: const Text('앱 사용법을 처음부터 안내해 드려요'),
+            onTap: () async {
+              await resetTutorial();
+              if (widget.onShowTutorial != null) {
+                widget.onShowTutorial!();
+              }
+            },
           ),
         ],
       ),

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/repositories/price_repository_impl.dart';
 import '../../domain/entities/price_point.dart';
 import '../../domain/enums/asset_type.dart';
+import 'background_refresh_provider.dart';
 import 'database_providers.dart';
 
 // ── Currency display toggle (false = native currency, true = KRW) ─────────────
@@ -99,7 +100,8 @@ class SyncNotifier extends StateNotifier<SyncState> {
   Future<void> syncAll() async {
     state = state.copyWith(isSyncing: true, error: null);
     try {
-      await _ref.read(priceRepositoryProvider).syncAllPrices();
+      // Use background refresh so live price overrides are updated
+      await _ref.read(backgroundPriceRefreshProvider.notifier).refreshNow();
       state = state.copyWith(
         isSyncing: false,
         lastSync: DateTime.now(),

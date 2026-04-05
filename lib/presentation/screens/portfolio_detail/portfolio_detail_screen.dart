@@ -30,8 +30,6 @@ class PortfolioDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final portfolioAsync = ref.watch(portfolioProvider(portfolioId));
-    final assetsAsync =
-        ref.watch(portfolioAssetsStreamProvider(portfolioId));
 
     return portfolioAsync.when(
       data: (portfolio) {
@@ -41,10 +39,7 @@ class PortfolioDetailScreen extends ConsumerWidget {
             body: const Center(child: Text('포트폴리오를 찾을 수 없습니다')),
           );
         }
-        return _PortfolioDetailView(
-          portfolio: portfolio,
-          assetsAsync: assetsAsync,
-        );
+        return _PortfolioDetailView(portfolio: portfolio);
       },
       loading: () => const Scaffold(
         body: Center(child: CircularProgressIndicator()),
@@ -56,54 +51,69 @@ class PortfolioDetailScreen extends ConsumerWidget {
   }
 }
 
-class _PortfolioDetailView extends ConsumerWidget {
+class _PortfolioDetailView extends ConsumerStatefulWidget {
   final Portfolio portfolio;
-  final AsyncValue<List<PortfolioAsset>> assetsAsync;
 
-  const _PortfolioDetailView({
-    required this.portfolio,
-    required this.assetsAsync,
-  });
+  const _PortfolioDetailView({required this.portfolio});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final metricsAsync = ref.watch(portfolioMetricsProvider(portfolio.id));
-    final weightsAsync = ref.watch(portfolioWeightsProvider(portfolio.id));
+  ConsumerState<_PortfolioDetailView> createState() =>
+      _PortfolioDetailViewState();
+}
+
+class _PortfolioDetailViewState extends ConsumerState<_PortfolioDetailView> {
+  // Local sort order during/after drag — overrides stream until DB catches up
+  List<PortfolioAsset>? _reorderedAssets;
+
+  Portfolio get _portfolio => widget.portfolio;
+
+  @override
+  Widget build(BuildContext context) {
+    final metricsAsync = ref.watch(portfolioMetricsProvider(_portfolio.id));
+    final weightsAsync = ref.watch(portfolioWeightsProvider(_portfolio.id));
+    final assetsAsync =
+        ref.watch(portfolioAssetsStreamProvider(_portfolio.id));
+
+    // Use local reorder state immediately; sync back to stream once DB matches
+    final streamAssets = assetsAsync.value;
+    List<PortfolioAsset> assets;
+    if (_reorderedAssets != null && streamAssets != null) {
+      final localIds = _reorderedAssets!.map((a) => a.id).join(',');
+      final streamIds = streamAssets.map((a) => a.id).join(',');
+      if (localIds == streamIds) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) setState(() => _reorderedAssets = null);
+        });
+      }
+      assets = _reorderedAssets!;
+    } else {
+      assets = streamAssets ?? [];
+    }
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(portfolio.name),
+        title: Text(_portfolio.name),
         actions: [
           IconButton(
             icon: const Icon(Icons.edit),
             onPressed: () =>
-                context.push('/portfolio/${portfolio.id}/edit'),
+                context.push('/portfolio/${_portfolio.id}/edit'),
           ),
           PopupMenuButton<String>(
             onSelected: (v) async {
-              if (v == 'reorder') {
-                final assets = assetsAsync.value;
-                if (assets != null && assets.isNotEmpty) {
-                  _showReorderDialog(context, ref, assets);
-                }
-              } else if (v == 'copy') {
-                final assets = assetsAsync.value ?? [];
-                await _showCopyDialog(context, ref, portfolio, assets);
+              if (v == 'copy') {
+                await _showCopyDialog(context, assets);
               } else if (v == 'delete') {
                 final confirm = await _confirmDelete(context);
                 if (confirm == true && context.mounted) {
                   await ref
                       .read(portfolioActionsProvider)
-                      .delete(portfolio.id);
+                      .delete(_portfolio.id);
                   if (context.mounted) context.pop();
                 }
               }
             },
             itemBuilder: (_) => [
-              const PopupMenuItem(
-                value: 'reorder',
-                child: Text('순서 편집'),
-              ),
               const PopupMenuItem(
                 value: 'copy',
                 child: Text('포트폴리오 복사'),
@@ -118,17 +128,14 @@ class _PortfolioDetailView extends ConsumerWidget {
       ),
       body: Column(
         children: [
-          // ── 스크롤 컨텐츠 ──────────────────────────────────────────────────
           Expanded(
-            child: assetsAsync.when(
-              data: (assets) => _buildBody(
-                  context, ref, assets, metricsAsync, weightsAsync),
-              loading: () =>
-                  const Center(child: CircularProgressIndicator()),
-              error: (_, __) => const SizedBox.shrink(),
-            ),
+            child: assetsAsync.hasError
+                ? const SizedBox.shrink()
+                : (assetsAsync.isLoading && assets.isEmpty)
+                    ? const Center(child: CircularProgressIndicator())
+                    : _buildBody(
+                        context, assets, metricsAsync, weightsAsync),
           ),
-          // 배너 광고 (홈바 위에 표시)
           const SafeArea(top: false, child: BannerAdWidget()),
         ],
       ),
@@ -139,14 +146,14 @@ class _PortfolioDetailView extends ConsumerWidget {
           children: [
             FloatingActionButton.small(
               heroTag: 'investment',
-              onPressed: () => _showInvestmentSheet(context, portfolio.id),
+              onPressed: () => _showInvestmentSheet(context, _portfolio.id),
               child: const Icon(Icons.attach_money),
             ),
             const SizedBox(height: 8),
             FloatingActionButton(
               heroTag: 'addAsset',
               onPressed: () =>
-                  context.push('/portfolio/${portfolio.id}/add-asset'),
+                  context.push('/portfolio/${_portfolio.id}/add-asset'),
               child: const Icon(Icons.add),
             ),
           ],
@@ -155,15 +162,28 @@ class _PortfolioDetailView extends ConsumerWidget {
     );
   }
 
+  // ── 자산 순서 드래그 처리 ─────────────────────────────────────────────────────
+  void _onReorder(List<PortfolioAsset> current, int oldIndex, int newIndex) {
+    if (newIndex > oldIndex) newIndex--;
+    final updated = List<PortfolioAsset>.from(current);
+    final item = updated.removeAt(oldIndex);
+    updated.insert(newIndex, item);
+    setState(() => _reorderedAssets = updated);
+
+    final idToSortOrder = <int, int>{
+      for (int i = 0; i < updated.length; i++) updated[i].id: i,
+    };
+    ref.read(assetActionsProvider).updateSortOrders(idToSortOrder);
+    HapticFeedback.lightImpact();
+  }
+
   Widget _buildBody(
     BuildContext context,
-    WidgetRef ref,
     List<PortfolioAsset> assets,
     AsyncValue<PortfolioMetrics> metricsAsync,
     AsyncValue<List<RebalancingGap>> weightsAsync,
   ) {
     final gaps = weightsAsync.value ?? [];
-
     final gapMap = {for (final g in gaps) g.assetId: g};
     final totalWeight =
         assets.fold(0.0, (sum, pa) => sum + pa.targetWeight);
@@ -214,7 +234,7 @@ class _PortfolioDetailView extends ConsumerWidget {
             }
             return Stack(
               children: [
-                _MetricsCard(metrics: m, portfolioId: portfolio.id),
+                _MetricsCard(metrics: m, portfolioId: _portfolio.id),
                 if (metricsAsync.isLoading)
                   const Positioned(
                     top: 12,
@@ -229,21 +249,47 @@ class _PortfolioDetailView extends ConsumerWidget {
             );
           }),
 
-          // ── 자산 목록 ──────────────────────────────────────────────────────
+          // ── 자산 목록 (길게 눌러서 순서 변경) ─────────────────────────────
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: Text(
-              '자산 목록',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 2),
+            child: Row(
+              children: [
+                Text(
+                  '자산 목록',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '길게 눌러 순서 변경',
+                  style: TextStyle(
+                      fontSize: 11, color: Colors.grey.shade500),
+                ),
+              ],
             ),
           ),
-          ...assets.map((pa) => _AssetListTile(
-                portfolioAsset: pa,
-                portfolioId: portfolio.id,
-                gap: gapMap[pa.assetId],
-              )),
+          ReorderableListView(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            buildDefaultDragHandles: true,
+            proxyDecorator: (child, index, animation) => Material(
+              elevation: 6,
+              borderRadius: BorderRadius.circular(12),
+              child: child,
+            ),
+            onReorder: (oldIndex, newIndex) =>
+                _onReorder(assets, oldIndex, newIndex),
+            children: [
+              for (final pa in assets)
+                _AssetListTile(
+                  key: ValueKey(pa.id),
+                  portfolioAsset: pa,
+                  portfolioId: _portfolio.id,
+                  gap: gapMap[pa.assetId],
+                ),
+            ],
+          ),
 
           const SizedBox(height: 8),
 
@@ -284,7 +330,7 @@ class _PortfolioDetailView extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: OutlinedButton.icon(
                 onPressed: () => context
-                    .push('/portfolio/${portfolio.id}/rebalance'),
+                    .push('/portfolio/${_portfolio.id}/rebalance'),
                 icon: const Icon(Icons.balance),
                 label: const Text('리밸런싱'),
                 style: OutlinedButton.styleFrom(
@@ -297,14 +343,14 @@ class _PortfolioDetailView extends ConsumerWidget {
           if (assets.isNotEmpty)
             Builder(builder: (ctx) {
               final entry = ref.read(portfolioStrategyLocalDsProvider)
-                  .getForPortfolio(portfolio.id);
+                  .getForPortfolio(_portfolio.id);
 
-              // 동적 자산배분 포트폴리오: 시점 재생성 버튼
               if (entry != null) {
                 return Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                   child: OutlinedButton.icon(
-                    onPressed: () => _showRegenerateSheet(context, ref, entry),
+                    onPressed: () =>
+                        _showRegenerateSheet(context, entry, assets),
                     icon: const Icon(Icons.update),
                     label: const Text('시점 재생성'),
                     style: OutlinedButton.styleFrom(
@@ -314,7 +360,6 @@ class _PortfolioDetailView extends ConsumerWidget {
                 );
               }
 
-              // 일반 포트폴리오: 위험성 분석 버튼
               return Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                 child: OutlinedButton.icon(
@@ -339,7 +384,7 @@ class _PortfolioDetailView extends ConsumerWidget {
                         context: context,
                         isScrollControlled: true,
                         builder: (_) => _RiskAnalysisSheet(
-                          portfolioId: portfolio.id,
+                          portfolioId: _portfolio.id,
                         ),
                       );
                     }
@@ -364,7 +409,7 @@ class _PortfolioDetailView extends ConsumerWidget {
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('포트폴리오 삭제'),
-          content: Text('${portfolio.name}을(를) 삭제하시겠습니까?'),
+          content: Text('${_portfolio.name}을(를) 삭제하시겠습니까?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -379,23 +424,14 @@ class _PortfolioDetailView extends ConsumerWidget {
         ),
       );
 
-  void _showReorderDialog(
-      BuildContext context, WidgetRef ref, List<PortfolioAsset> assets) {
-    showDialog(
-      context: context,
-      builder: (ctx) => _ReorderAssetsDialog(assets: assets),
-    );
-  }
-
   Future<void> _showCopyDialog(
     BuildContext context,
-    WidgetRef ref,
-    Portfolio src,
     List<PortfolioAsset> assets,
   ) async {
     final name = await showDialog<String>(
       context: context,
-      builder: (_) => _CopyNameDialog(defaultName: '${src.name} 복사본'),
+      builder: (_) =>
+          _CopyNameDialog(defaultName: '${_portfolio.name} 복사본'),
     );
     if (name == null || name.trim().isEmpty || !context.mounted) return;
 
@@ -404,11 +440,11 @@ class _PortfolioDetailView extends ConsumerWidget {
           Portfolio(
             id: 0,
             name: name.trim(),
-            description: src.description,
-            baseCurrency: src.baseCurrency,
-            rebalancePeriod: src.rebalancePeriod,
+            description: _portfolio.description,
+            baseCurrency: _portfolio.baseCurrency,
+            rebalancePeriod: _portfolio.rebalancePeriod,
             nextRebalanceDate: null,
-            deviationThreshold: src.deviationThreshold,
+            deviationThreshold: _portfolio.deviationThreshold,
             createdAt: now,
             updatedAt: now,
           ),
@@ -450,16 +486,16 @@ class _PortfolioDetailView extends ConsumerWidget {
 
   void _showRegenerateSheet(
     BuildContext context,
-    WidgetRef ref,
     PortfolioStrategyEntry entry,
+    List<PortfolioAsset> assets,
   ) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder: (_) => _RegenerateSheet(
-        portfolioId: portfolio.id,
+        portfolioId: _portfolio.id,
         entry: entry,
-        currentAssets: assetsAsync.value ?? [],
+        currentAssets: assets,
       ),
     );
   }
@@ -862,6 +898,7 @@ class _AssetListTile extends ConsumerWidget {
   final RebalancingGap? gap;
 
   const _AssetListTile({
+    super.key,
     required this.portfolioAsset,
     required this.portfolioId,
     this.gap,

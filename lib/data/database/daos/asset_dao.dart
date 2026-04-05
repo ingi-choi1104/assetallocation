@@ -31,4 +31,17 @@ class AssetDao extends DatabaseAccessor<AppDatabase>
           lastPriceUpdatedAt: Value(DateTime.now()),
         ),
       );
+
+  Future<void> updateLastPriceAndPreviousClose(
+    int id,
+    double price,
+    double? previousClose,
+  ) =>
+      (update(assets)..where((a) => a.id.equals(id))).write(
+        AssetsCompanion(
+          lastPrice: Value(price),
+          lastPreviousClose: Value(previousClose),
+          lastPriceUpdatedAt: Value(DateTime.now()),
+        ),
+      );
 }

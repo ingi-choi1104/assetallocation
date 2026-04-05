@@ -542,6 +542,12 @@ class $AssetsTable extends Assets with TableInfo<$AssetsTable, AssetRecord> {
   late final GeneratedColumn<double> lastPrice = GeneratedColumn<double>(
       'last_price', aliasedName, true,
       type: DriftSqlType.double, requiredDuringInsert: false);
+  static const VerificationMeta _lastPreviousCloseMeta =
+      const VerificationMeta('lastPreviousClose');
+  @override
+  late final GeneratedColumn<double> lastPreviousClose =
+      GeneratedColumn<double>('last_previous_close', aliasedName, true,
+          type: DriftSqlType.double, requiredDuringInsert: false);
   static const VerificationMeta _lastPriceUpdatedAtMeta =
       const VerificationMeta('lastPriceUpdatedAt');
   @override
@@ -565,6 +571,7 @@ class $AssetsTable extends Assets with TableInfo<$AssetsTable, AssetRecord> {
         currency,
         fundCode,
         lastPrice,
+        lastPreviousClose,
         lastPriceUpdatedAt,
         createdAt
       ];
@@ -613,6 +620,12 @@ class $AssetsTable extends Assets with TableInfo<$AssetsTable, AssetRecord> {
       context.handle(_lastPriceMeta,
           lastPrice.isAcceptableOrUnknown(data['last_price']!, _lastPriceMeta));
     }
+    if (data.containsKey('last_previous_close')) {
+      context.handle(
+          _lastPreviousCloseMeta,
+          lastPreviousClose.isAcceptableOrUnknown(
+              data['last_previous_close']!, _lastPreviousCloseMeta));
+    }
     if (data.containsKey('last_price_updated_at')) {
       context.handle(
           _lastPriceUpdatedAtMeta,
@@ -650,6 +663,8 @@ class $AssetsTable extends Assets with TableInfo<$AssetsTable, AssetRecord> {
           .read(DriftSqlType.string, data['${effectivePrefix}fund_code']),
       lastPrice: attachedDatabase.typeMapping
           .read(DriftSqlType.double, data['${effectivePrefix}last_price']),
+      lastPreviousClose: attachedDatabase.typeMapping.read(
+          DriftSqlType.double, data['${effectivePrefix}last_previous_close']),
       lastPriceUpdatedAt: attachedDatabase.typeMapping.read(
           DriftSqlType.dateTime,
           data['${effectivePrefix}last_price_updated_at']),
@@ -672,6 +687,7 @@ class AssetRecord extends DataClass implements Insertable<AssetRecord> {
   final String currency;
   final String? fundCode;
   final double? lastPrice;
+  final double? lastPreviousClose;
   final DateTime? lastPriceUpdatedAt;
   final DateTime createdAt;
   const AssetRecord(
@@ -682,6 +698,7 @@ class AssetRecord extends DataClass implements Insertable<AssetRecord> {
       required this.currency,
       this.fundCode,
       this.lastPrice,
+      this.lastPreviousClose,
       this.lastPriceUpdatedAt,
       required this.createdAt});
   @override
@@ -697,6 +714,9 @@ class AssetRecord extends DataClass implements Insertable<AssetRecord> {
     }
     if (!nullToAbsent || lastPrice != null) {
       map['last_price'] = Variable<double>(lastPrice);
+    }
+    if (!nullToAbsent || lastPreviousClose != null) {
+      map['last_previous_close'] = Variable<double>(lastPreviousClose);
     }
     if (!nullToAbsent || lastPriceUpdatedAt != null) {
       map['last_price_updated_at'] = Variable<DateTime>(lastPriceUpdatedAt);
@@ -718,6 +738,9 @@ class AssetRecord extends DataClass implements Insertable<AssetRecord> {
       lastPrice: lastPrice == null && nullToAbsent
           ? const Value.absent()
           : Value(lastPrice),
+      lastPreviousClose: lastPreviousClose == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastPreviousClose),
       lastPriceUpdatedAt: lastPriceUpdatedAt == null && nullToAbsent
           ? const Value.absent()
           : Value(lastPriceUpdatedAt),
@@ -736,6 +759,8 @@ class AssetRecord extends DataClass implements Insertable<AssetRecord> {
       currency: serializer.fromJson<String>(json['currency']),
       fundCode: serializer.fromJson<String?>(json['fundCode']),
       lastPrice: serializer.fromJson<double?>(json['lastPrice']),
+      lastPreviousClose:
+          serializer.fromJson<double?>(json['lastPreviousClose']),
       lastPriceUpdatedAt:
           serializer.fromJson<DateTime?>(json['lastPriceUpdatedAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
@@ -752,6 +777,7 @@ class AssetRecord extends DataClass implements Insertable<AssetRecord> {
       'currency': serializer.toJson<String>(currency),
       'fundCode': serializer.toJson<String?>(fundCode),
       'lastPrice': serializer.toJson<double?>(lastPrice),
+      'lastPreviousClose': serializer.toJson<double?>(lastPreviousClose),
       'lastPriceUpdatedAt': serializer.toJson<DateTime?>(lastPriceUpdatedAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
@@ -765,6 +791,7 @@ class AssetRecord extends DataClass implements Insertable<AssetRecord> {
           String? currency,
           Value<String?> fundCode = const Value.absent(),
           Value<double?> lastPrice = const Value.absent(),
+          Value<double?> lastPreviousClose = const Value.absent(),
           Value<DateTime?> lastPriceUpdatedAt = const Value.absent(),
           DateTime? createdAt}) =>
       AssetRecord(
@@ -775,6 +802,9 @@ class AssetRecord extends DataClass implements Insertable<AssetRecord> {
         currency: currency ?? this.currency,
         fundCode: fundCode.present ? fundCode.value : this.fundCode,
         lastPrice: lastPrice.present ? lastPrice.value : this.lastPrice,
+        lastPreviousClose: lastPreviousClose.present
+            ? lastPreviousClose.value
+            : this.lastPreviousClose,
         lastPriceUpdatedAt: lastPriceUpdatedAt.present
             ? lastPriceUpdatedAt.value
             : this.lastPriceUpdatedAt,
@@ -789,6 +819,9 @@ class AssetRecord extends DataClass implements Insertable<AssetRecord> {
       currency: data.currency.present ? data.currency.value : this.currency,
       fundCode: data.fundCode.present ? data.fundCode.value : this.fundCode,
       lastPrice: data.lastPrice.present ? data.lastPrice.value : this.lastPrice,
+      lastPreviousClose: data.lastPreviousClose.present
+          ? data.lastPreviousClose.value
+          : this.lastPreviousClose,
       lastPriceUpdatedAt: data.lastPriceUpdatedAt.present
           ? data.lastPriceUpdatedAt.value
           : this.lastPriceUpdatedAt,
@@ -806,6 +839,7 @@ class AssetRecord extends DataClass implements Insertable<AssetRecord> {
           ..write('currency: $currency, ')
           ..write('fundCode: $fundCode, ')
           ..write('lastPrice: $lastPrice, ')
+          ..write('lastPreviousClose: $lastPreviousClose, ')
           ..write('lastPriceUpdatedAt: $lastPriceUpdatedAt, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -814,7 +848,7 @@ class AssetRecord extends DataClass implements Insertable<AssetRecord> {
 
   @override
   int get hashCode => Object.hash(id, symbol, name, assetType, currency,
-      fundCode, lastPrice, lastPriceUpdatedAt, createdAt);
+      fundCode, lastPrice, lastPreviousClose, lastPriceUpdatedAt, createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -826,6 +860,7 @@ class AssetRecord extends DataClass implements Insertable<AssetRecord> {
           other.currency == this.currency &&
           other.fundCode == this.fundCode &&
           other.lastPrice == this.lastPrice &&
+          other.lastPreviousClose == this.lastPreviousClose &&
           other.lastPriceUpdatedAt == this.lastPriceUpdatedAt &&
           other.createdAt == this.createdAt);
 }
@@ -838,6 +873,7 @@ class AssetsCompanion extends UpdateCompanion<AssetRecord> {
   final Value<String> currency;
   final Value<String?> fundCode;
   final Value<double?> lastPrice;
+  final Value<double?> lastPreviousClose;
   final Value<DateTime?> lastPriceUpdatedAt;
   final Value<DateTime> createdAt;
   const AssetsCompanion({
@@ -848,6 +884,7 @@ class AssetsCompanion extends UpdateCompanion<AssetRecord> {
     this.currency = const Value.absent(),
     this.fundCode = const Value.absent(),
     this.lastPrice = const Value.absent(),
+    this.lastPreviousClose = const Value.absent(),
     this.lastPriceUpdatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
   });
@@ -859,6 +896,7 @@ class AssetsCompanion extends UpdateCompanion<AssetRecord> {
     required String currency,
     this.fundCode = const Value.absent(),
     this.lastPrice = const Value.absent(),
+    this.lastPreviousClose = const Value.absent(),
     this.lastPriceUpdatedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
   })  : symbol = Value(symbol),
@@ -873,6 +911,7 @@ class AssetsCompanion extends UpdateCompanion<AssetRecord> {
     Expression<String>? currency,
     Expression<String>? fundCode,
     Expression<double>? lastPrice,
+    Expression<double>? lastPreviousClose,
     Expression<DateTime>? lastPriceUpdatedAt,
     Expression<DateTime>? createdAt,
   }) {
@@ -884,6 +923,7 @@ class AssetsCompanion extends UpdateCompanion<AssetRecord> {
       if (currency != null) 'currency': currency,
       if (fundCode != null) 'fund_code': fundCode,
       if (lastPrice != null) 'last_price': lastPrice,
+      if (lastPreviousClose != null) 'last_previous_close': lastPreviousClose,
       if (lastPriceUpdatedAt != null)
         'last_price_updated_at': lastPriceUpdatedAt,
       if (createdAt != null) 'created_at': createdAt,
@@ -898,6 +938,7 @@ class AssetsCompanion extends UpdateCompanion<AssetRecord> {
       Value<String>? currency,
       Value<String?>? fundCode,
       Value<double?>? lastPrice,
+      Value<double?>? lastPreviousClose,
       Value<DateTime?>? lastPriceUpdatedAt,
       Value<DateTime>? createdAt}) {
     return AssetsCompanion(
@@ -908,6 +949,7 @@ class AssetsCompanion extends UpdateCompanion<AssetRecord> {
       currency: currency ?? this.currency,
       fundCode: fundCode ?? this.fundCode,
       lastPrice: lastPrice ?? this.lastPrice,
+      lastPreviousClose: lastPreviousClose ?? this.lastPreviousClose,
       lastPriceUpdatedAt: lastPriceUpdatedAt ?? this.lastPriceUpdatedAt,
       createdAt: createdAt ?? this.createdAt,
     );
@@ -937,6 +979,9 @@ class AssetsCompanion extends UpdateCompanion<AssetRecord> {
     if (lastPrice.present) {
       map['last_price'] = Variable<double>(lastPrice.value);
     }
+    if (lastPreviousClose.present) {
+      map['last_previous_close'] = Variable<double>(lastPreviousClose.value);
+    }
     if (lastPriceUpdatedAt.present) {
       map['last_price_updated_at'] =
           Variable<DateTime>(lastPriceUpdatedAt.value);
@@ -957,6 +1002,7 @@ class AssetsCompanion extends UpdateCompanion<AssetRecord> {
           ..write('currency: $currency, ')
           ..write('fundCode: $fundCode, ')
           ..write('lastPrice: $lastPrice, ')
+          ..write('lastPreviousClose: $lastPreviousClose, ')
           ..write('lastPriceUpdatedAt: $lastPriceUpdatedAt, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -2904,6 +2950,7 @@ typedef $$AssetsTableCreateCompanionBuilder = AssetsCompanion Function({
   required String currency,
   Value<String?> fundCode,
   Value<double?> lastPrice,
+  Value<double?> lastPreviousClose,
   Value<DateTime?> lastPriceUpdatedAt,
   Value<DateTime> createdAt,
 });
@@ -2915,6 +2962,7 @@ typedef $$AssetsTableUpdateCompanionBuilder = AssetsCompanion Function({
   Value<String> currency,
   Value<String?> fundCode,
   Value<double?> lastPrice,
+  Value<double?> lastPreviousClose,
   Value<DateTime?> lastPriceUpdatedAt,
   Value<DateTime> createdAt,
 });
@@ -2985,6 +3033,10 @@ class $$AssetsTableFilterComposer
 
   ColumnFilters<double> get lastPrice => $composableBuilder(
       column: $table.lastPrice, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<double> get lastPreviousClose => $composableBuilder(
+      column: $table.lastPreviousClose,
+      builder: (column) => ColumnFilters(column));
 
   ColumnFilters<DateTime> get lastPriceUpdatedAt => $composableBuilder(
       column: $table.lastPriceUpdatedAt,
@@ -3066,6 +3118,10 @@ class $$AssetsTableOrderingComposer
   ColumnOrderings<double> get lastPrice => $composableBuilder(
       column: $table.lastPrice, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<double> get lastPreviousClose => $composableBuilder(
+      column: $table.lastPreviousClose,
+      builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<DateTime> get lastPriceUpdatedAt => $composableBuilder(
       column: $table.lastPriceUpdatedAt,
       builder: (column) => ColumnOrderings(column));
@@ -3103,6 +3159,9 @@ class $$AssetsTableAnnotationComposer
 
   GeneratedColumn<double> get lastPrice =>
       $composableBuilder(column: $table.lastPrice, builder: (column) => column);
+
+  GeneratedColumn<double> get lastPreviousClose => $composableBuilder(
+      column: $table.lastPreviousClose, builder: (column) => column);
 
   GeneratedColumn<DateTime> get lastPriceUpdatedAt => $composableBuilder(
       column: $table.lastPriceUpdatedAt, builder: (column) => column);
@@ -3183,6 +3242,7 @@ class $$AssetsTableTableManager extends RootTableManager<
             Value<String> currency = const Value.absent(),
             Value<String?> fundCode = const Value.absent(),
             Value<double?> lastPrice = const Value.absent(),
+            Value<double?> lastPreviousClose = const Value.absent(),
             Value<DateTime?> lastPriceUpdatedAt = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
           }) =>
@@ -3194,6 +3254,7 @@ class $$AssetsTableTableManager extends RootTableManager<
             currency: currency,
             fundCode: fundCode,
             lastPrice: lastPrice,
+            lastPreviousClose: lastPreviousClose,
             lastPriceUpdatedAt: lastPriceUpdatedAt,
             createdAt: createdAt,
           ),
@@ -3205,6 +3266,7 @@ class $$AssetsTableTableManager extends RootTableManager<
             required String currency,
             Value<String?> fundCode = const Value.absent(),
             Value<double?> lastPrice = const Value.absent(),
+            Value<double?> lastPreviousClose = const Value.absent(),
             Value<DateTime?> lastPriceUpdatedAt = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
           }) =>
@@ -3216,6 +3278,7 @@ class $$AssetsTableTableManager extends RootTableManager<
             currency: currency,
             fundCode: fundCode,
             lastPrice: lastPrice,
+            lastPreviousClose: lastPreviousClose,
             lastPriceUpdatedAt: lastPriceUpdatedAt,
             createdAt: createdAt,
           ),

@@ -13,6 +13,7 @@ class Asset with _$Asset {
     required String currency,
     String? fundCode,
     double? lastPrice,
+    double? lastPreviousClose,
     DateTime? lastPriceUpdatedAt,
     required DateTime createdAt,
   }) = _Asset;

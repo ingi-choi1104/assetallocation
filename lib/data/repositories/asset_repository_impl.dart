@@ -139,6 +139,7 @@ class AssetRepositoryImpl implements AssetRepository {
         currency: r.currency,
         fundCode: r.fundCode,
         lastPrice: r.lastPrice,
+        lastPreviousClose: r.lastPreviousClose,
         lastPriceUpdatedAt: r.lastPriceUpdatedAt,
         createdAt: r.createdAt,
       );
