@@ -44,4 +44,8 @@ class AssetDao extends DatabaseAccessor<AppDatabase>
           lastPriceUpdatedAt: Value(DateTime.now()),
         ),
       );
+
+  Future<void> updateNameBySymbol(String symbol, String name) =>
+      (update(assets)..where((a) => a.symbol.equals(symbol)))
+          .write(AssetsCompanion(name: Value(name)));
 }

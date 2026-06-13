@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest.dart' as tz;
 
 import 'app.dart';
+import 'data/database/app_database.dart';
 import 'presentation/providers/database_providers.dart';
 import 'services/notification_service.dart';
 
@@ -28,6 +29,12 @@ void main() async {
 
   // Load SharedPreferences
   final prefs = await SharedPreferences.getInstance();
+
+  // Fix incorrect ETF names stored in DB
+  final db = AppDatabase();
+  await db.assetDao.updateNameBySymbol('411060', 'ACE KRX금현물');
+  await db.assetDao.updateNameBySymbol('148070', 'KIWOOM 국고채10년');
+  await db.close();
 
   runApp(
     ProviderScope(

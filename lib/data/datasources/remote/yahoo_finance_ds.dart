@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import '../../models/price_quote.dart';
 import '../../../core/constants/api_endpoints.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../../domain/entities/dividend_info.dart';
 
 class YahooFinanceDataSource {
   final Dio _dio;
@@ -151,6 +152,51 @@ class YahooFinanceDataSource {
         throw const RateLimitException('Yahoo Finance');
       }
       throw NetworkException('Yahoo Finance 검색 실패: ${e.message}');
+    }
+  }
+
+  /// Fetches up to 3 years of dividend events for [symbol].
+  /// Returns empty list if no dividends or on error.
+  Future<List<DividendEvent>> fetchDividendHistory(String symbol) async {
+    try {
+      final response = await _dio.get(
+        'https://query2.finance.yahoo.com/v8/finance/chart/$symbol',
+        queryParameters: {
+          'interval': '1mo',
+          'range': '3y',
+          'events': 'dividends',
+        },
+      );
+      return _parseDividendEvents(response.data);
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 429) {
+        throw const RateLimitException('Yahoo Finance');
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  List<DividendEvent> _parseDividendEvents(dynamic data) {
+    try {
+      final result = data['chart']['result'] as List?;
+      if (result == null || result.isEmpty) return [];
+      final dividends =
+          result[0]['events']?['dividends'] as Map<String, dynamic>?;
+      if (dividends == null) return [];
+      final events = dividends.values.map((e) {
+        final ts = (e['date'] as num).toInt();
+        final amt = (e['amount'] as num).toDouble();
+        return DividendEvent(
+          date: DateTime.fromMillisecondsSinceEpoch(ts * 1000),
+          amountPerShare: amt,
+        );
+      }).toList();
+      events.sort((a, b) => a.date.compareTo(b.date));
+      return events;
+    } catch (_) {
+      return [];
     }
   }
 

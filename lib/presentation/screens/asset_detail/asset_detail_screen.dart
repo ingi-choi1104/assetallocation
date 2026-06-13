@@ -192,14 +192,43 @@ class _AssetDetailView extends ConsumerWidget {
       );
 }
 
-class _AssetHeader extends StatelessWidget {
+class _AssetHeader extends ConsumerWidget {
   final PortfolioAsset portfolioAsset;
 
   const _AssetHeader({required this.portfolioAsset});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final asset = portfolioAsset.asset;
+    final priceChange = asset != null
+        ? ref.watch(priceChangeProvider(asset.id))
+        : null;
+
+    final displayPrice = priceChange?.currentPrice ?? asset?.lastPrice;
+    final changePercent = priceChange?.changePercent;
+
+    Color changeColor = Colors.grey;
+    String changeText = '';
+    if (changePercent != null) {
+      final isKrStyle = asset?.assetType == AssetType.krStock;
+      // 한국 증시 관행: 상승=빨간색, 하락=파란색 / 해외: 상승=초록색, 하락=빨간색
+      if (isKrStyle) {
+        changeColor = changePercent > 0
+            ? AppColors.negative
+            : changePercent < 0
+                ? const Color(0xFF1565C0)
+                : Colors.grey;
+      } else {
+        changeColor = changePercent > 0
+            ? AppColors.positive
+            : changePercent < 0
+                ? AppColors.negative
+                : Colors.grey;
+      }
+      final sign = changePercent >= 0 ? '+' : '';
+      changeText = '$sign${changePercent.toStringAsFixed(2)}%';
+    }
+
     return Card(
       margin: const EdgeInsets.all(16),
       child: Padding(
@@ -223,12 +252,25 @@ class _AssetHeader extends StatelessWidget {
                 ],
               ),
             ),
-            if (asset?.lastPrice != null)
-              Text(
-                CurrencyFormatter.format(
-                    asset!.lastPrice!, asset.currency),
-                style: const TextStyle(
-                    fontSize: 20, fontWeight: FontWeight.bold),
+            if (displayPrice != null)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    CurrencyFormatter.format(
+                        displayPrice, asset!.currency),
+                    style: const TextStyle(
+                        fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  if (changeText.isNotEmpty)
+                    Text(
+                      changeText,
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: changeColor),
+                    ),
+                ],
               ),
           ],
         ),

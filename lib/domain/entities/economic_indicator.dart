@@ -67,9 +67,7 @@ const _exchangeRates = <IndicatorDef>[
 ];
 
 const _commodities = <IndicatorDef>[
-  // XAUUSD=X: 금 현물 USD/troy oz → ÷31.1035 = USD/g
-  IndicatorDef(symbol: 'XAUUSD=X', label: '금 현물',  category: IndicatorCategory.commodity, unit: 'USD/g',   multiplier: 0.032151),
-  IndicatorDef(symbol: 'GC=F',     label: '금 선물',  category: IndicatorCategory.commodity, unit: 'USD/oz'),
+  IndicatorDef(symbol: 'GC=F',     label: '금',       category: IndicatorCategory.commodity, unit: 'USD/oz'),
   IndicatorDef(symbol: 'SI=F',     label: '은',       category: IndicatorCategory.commodity, unit: 'USD/oz'),
   IndicatorDef(symbol: 'CL=F',     label: 'WTI유가',  category: IndicatorCategory.commodity, unit: 'USD/bbl'),
   IndicatorDef(symbol: 'BZ=F',     label: '두바이유', category: IndicatorCategory.commodity, unit: 'USD/bbl'),

@@ -144,6 +144,13 @@ class _BundleContentState extends ConsumerState<_BundleContent> {
                 SliverToBoxAdapter(
                   child: _BundleSummaryCard(
                     portfolioIds: widget.bundle.portfolioIds,
+                    onTap: () => context.push(
+                      '/bundle/$bundleId/assets',
+                      extra: {
+                        'name': widget.bundle.name,
+                        'portfolioIds': widget.bundle.portfolioIds,
+                      },
+                    ),
                   ),
                 ),
                 // 드래그 힌트
@@ -356,8 +363,9 @@ enum _Action { dissolve }
 
 class _BundleSummaryCard extends ConsumerWidget {
   final List<int> portfolioIds;
+  final VoidCallback? onTap;
 
-  const _BundleSummaryCard({required this.portfolioIds});
+  const _BundleSummaryCard({required this.portfolioIds, this.onTap});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -403,14 +411,25 @@ class _BundleSummaryCard extends ConsumerWidget {
 
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Padding(
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '묶음 전체',
-                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                Row(
+                  children: [
+                    Text(
+                      '묶음 전체',
+                      style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                    ),
+                    if (onTap != null) ...[
+                      const SizedBox(width: 4),
+                      Icon(Icons.chevron_right, size: 16, color: Colors.grey.shade400),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -452,6 +471,7 @@ class _BundleSummaryCard extends ConsumerWidget {
                 ],
               ],
             ),
+          ),
           ),
         );
       },

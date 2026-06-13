@@ -17,6 +17,7 @@ import '../../../domain/entities/portfolio.dart';
 import '../../../domain/entities/portfolio_bundle.dart';
 import '../../widgets/tutorial_overlay.dart';
 import '../settings/settings_screen.dart';
+import '../dividend/dividend_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -44,6 +45,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       label: '포트폴리오',
     ),
     NavigationDestination(
+      icon: Icon(Icons.savings_outlined),
+      selectedIcon: Icon(Icons.savings),
+      label: '배당',
+    ),
+    NavigationDestination(
       icon: Icon(Icons.settings_outlined),
       selectedIcon: Icon(Icons.settings),
       label: '설정',
@@ -69,6 +75,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         index: _selectedTab,
         children: [
           _PortfolioListTab(tutorialKeys: _tutorialKeys),
+          const DividendScreen(),
           SettingsScreen(
             onShowTutorial: () => showTutorialOverlay(context, _tutorialKeys,
                 onTabSwitch: (tab) => setState(() => _selectedTab = tab)),
@@ -295,65 +302,71 @@ class _GlobalSummaryCard extends ConsumerWidget {
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Text('전체 포트폴리오',
-                    style:
-                        TextStyle(fontSize: 13, color: Colors.grey)),
-                if (metricsAsync.isLoading) ...[
-                  const SizedBox(width: 8),
-                  const SizedBox(
-                    width: 12,
-                    height: 12,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              valueDisplay,
-              style: const TextStyle(
-                  fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            if (dailyChange != null) ...[
-              const SizedBox(height: 2),
-              _DailyChangeText(
-                change: dailyChange,
-                showKrw: showKrw,
-                rate: rate,
-              ),
-            ],
-            if (hasInvestments) ...[
-              const SizedBox(height: 8),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => context.push('/global-assets'),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Row(
                 children: [
-                  Text(
-                    '수익률 ${CurrencyFormatter.formatSignedPercent(m.returnRate * 100)}',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: returnColor,
+                  const Text('전체 포트폴리오',
+                      style: TextStyle(fontSize: 13, color: Colors.grey)),
+                  if (metricsAsync.isLoading) ...[
+                    const SizedBox(width: 8),
+                    const SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  Text(
-                    '연평균 ${CurrencyFormatter.formatSignedPercent(m.annualizedReturnRate * 100)}',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: annReturnColor,
-                    ),
-                  ),
+                  ],
+                  const Spacer(),
+                  Icon(Icons.chevron_right,
+                      size: 18, color: Colors.grey.shade400),
                 ],
               ),
+              const SizedBox(height: 4),
+              Text(
+                valueDisplay,
+                style: const TextStyle(
+                    fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+              if (dailyChange != null) ...[
+                const SizedBox(height: 2),
+                _DailyChangeText(
+                  change: dailyChange,
+                  showKrw: showKrw,
+                  rate: rate,
+                ),
+              ],
+              if (hasInvestments) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Text(
+                      '수익률 ${CurrencyFormatter.formatSignedPercent(m.returnRate * 100)}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: returnColor,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Text(
+                      '연평균 ${CurrencyFormatter.formatSignedPercent(m.annualizedReturnRate * 100)}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: annReturnColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -586,7 +599,9 @@ class _IndicatorTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            indicator.def.label,
+            indicator.def.category == IndicatorCategory.commodity
+                ? '${indicator.def.label}(${indicator.def.unit})'
+                : indicator.def.label,
             style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
             overflow: TextOverflow.ellipsis,
             maxLines: 1,

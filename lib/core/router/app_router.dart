@@ -14,6 +14,8 @@ import '../../presentation/screens/dynamic_allocation/strategy_result_screen.dar
 import '../../presentation/screens/portfolio_bundle/portfolio_bundle_screen.dart';
 import '../../presentation/screens/snapshot/snapshot_list_screen.dart';
 import '../../presentation/screens/snapshot/snapshot_detail_screen.dart';
+import '../../presentation/screens/global_assets/global_assets_screen.dart';
+import '../../presentation/screens/portfolio_bundle/bundle_assets_screen.dart';
 import '../../domain/entities/dynamic_allocation.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -27,6 +29,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/global-assets',
+        builder: (context, state) => const GlobalAssetsScreen(),
       ),
       GoRoute(
         path: '/snapshots',
@@ -43,6 +49,18 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => PortfolioBundleScreen(
           bundleId: int.parse(state.pathParameters['id']!),
         ),
+        routes: [
+          GoRoute(
+            path: 'assets',
+            builder: (context, state) {
+              final extra = state.extra as Map<String, dynamic>;
+              return BundleAssetsScreen(
+                bundleName: extra['name'] as String,
+                portfolioIds: (extra['portfolioIds'] as List).cast<int>(),
+              );
+            },
+          ),
+        ],
       ),
       GoRoute(
         path: '/dynamic-allocation',

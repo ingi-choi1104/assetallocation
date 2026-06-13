@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../domain/enums/asset_type.dart';
 import '../../domain/services/financial_calculator.dart';
 import 'asset_providers.dart';
@@ -9,6 +10,13 @@ import 'portfolio_bundle_providers.dart';
 import 'portfolio_providers.dart';
 import 'price_providers.dart';
 import 'transaction_providers.dart';
+
+/// Converts a native-currency value to KRW using the given FX rate table.
+double _toKrw(double nativeValue, String currency, Map<String, double> fxRates) {
+  if (currency == 'KRW') return nativeValue;
+  final rate = fxRates[currency];
+  return rate != null ? nativeValue * rate : nativeValue;
+}
 
 /// Returns current prices for all assets in a portfolio.
 /// On startup: uses cached lastPrice from DB — instant, no network call.
@@ -39,7 +47,7 @@ final portfolioMetricsProvider =
     FutureProvider.family<PortfolioMetrics, int>((ref, portfolioId) async {
   final portfolioAssets =
       await ref.watch(portfolioAssetsStreamProvider(portfolioId).future);
-  final rate = await ref.watch(usdKrwRateProvider.future);
+  final fxRates = await ref.watch(fxRatesProvider.future);
 
   double totalValue = 0;
 
@@ -60,9 +68,9 @@ final portfolioMetricsProvider =
       transactions: transactions,
     );
 
-    final isUsd = (pa.asset?.currency ?? 'KRW').toUpperCase() == 'USD';
+    final currency = (pa.asset?.currency ?? 'KRW').toUpperCase();
     final nativeValue = holdings * currentPrice;
-    totalValue += isUsd ? nativeValue * rate : nativeValue;
+    totalValue += _toKrw(nativeValue, currency, fxRates);
   }
 
   // Use investments (stream-based) for immediate recalculation on changes
@@ -101,7 +109,7 @@ final portfolioWeightsProvider =
         (ref, portfolioId) async {
   final portfolioAssets =
       await ref.watch(portfolioAssetsStreamProvider(portfolioId).future);
-  final rate = await ref.watch(usdKrwRateProvider.future);
+  final fxRates = await ref.watch(fxRatesProvider.future);
 
   final currentValues = <int, double>{};
   final targetWeights = <int, double>{};
@@ -130,9 +138,8 @@ final portfolioWeightsProvider =
     );
 
     final currency = (pa.asset?.currency ?? 'KRW').toUpperCase();
-    final isUsd = currency == 'USD';
     final nativeValue = holdings * currentPrice;
-    currentValues[pa.assetId] = isUsd ? nativeValue * rate : nativeValue;
+    currentValues[pa.assetId] = _toKrw(nativeValue, currency, fxRates);
     targetWeights[pa.assetId] = pa.targetWeight;
     assetNames[pa.assetId] = pa.asset?.name ?? pa.assetId.toString();
     assetSymbols[pa.assetId] = pa.asset?.symbol ?? '';
@@ -231,6 +238,12 @@ final globalMetricsProvider =
     );
   }
 
+  // 은퇴계산기 등 외부 앱이 읽을 수 있도록 총 자산을 SharedPreferences에 캐시
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('portfolio_total_krw', totalValue.toStringAsFixed(2));
+  } catch (_) {}
+
   return PortfolioMetrics(
     totalValue: totalValue,
     totalInvested: totalInvested,
@@ -315,7 +328,7 @@ final portfolioDailyChangeProvider =
   final assetsAsync = ref.watch(portfolioAssetsStreamProvider(portfolioId));
   final weightsAsync = ref.watch(portfolioWeightsProvider(portfolioId));
   final repo = ref.watch(priceRepositoryProvider);
-  final rate = ref.watch(usdKrwRateSyncProvider);
+  final fxRates = ref.watch(fxRatesSyncProvider);
 
   final assets = assetsAsync.value;
   final gaps = weightsAsync.value;
@@ -335,8 +348,8 @@ final portfolioDailyChangeProvider =
     final holdings = holdingsMap[pa.assetId] ?? 0;
     if (holdings == 0) continue;
 
-    final isUsd = (pa.asset?.currency ?? 'KRW').toUpperCase() == 'USD';
-    final multiplier = isUsd ? rate : 1.0;
+    final currency = (pa.asset?.currency ?? 'KRW').toUpperCase();
+    final multiplier = fxRates[currency] ?? 1.0;
 
     totalCurrent += holdings * info.currentPrice * multiplier;
     if (info.previousClose != null) {
@@ -853,4 +866,173 @@ final riskAnalysisProvider =
     mdd: FinancialCalculator.maxDrawdown(portfolioValues),
     stdDev: FinancialCalculator.annualizedStdDev(portfolioValues),
   );
+});
+
+// ── 전체 포트폴리오 종목별 합산 ──────────────────────────────────────────────────
+
+class GlobalAssetSummary {
+  final int assetId;
+  final String symbol;
+  final String name;
+  final AssetType assetType;
+  final String currency;
+  final double totalHoldings;
+  final double currentPrice;
+  final double totalValueKrw;
+  final double weight;
+
+  const GlobalAssetSummary({
+    required this.assetId,
+    required this.symbol,
+    required this.name,
+    required this.assetType,
+    required this.currency,
+    required this.totalHoldings,
+    required this.currentPrice,
+    required this.totalValueKrw,
+    required this.weight,
+  });
+}
+
+/// 모든 포트폴리오의 자산을 assetId 기준으로 합산. 평가금액 내림차순 정렬.
+final globalAssetsProvider =
+    FutureProvider<List<GlobalAssetSummary>>((ref) async {
+  final portfolios = await ref.watch(portfoliosStreamProvider.future);
+  final fxRates = await ref.watch(fxRatesProvider.future);
+
+  final holdingsMap = <int, double>{};
+  final priceMap = <int, double>{};
+  final symbolMap = <int, String>{};
+  final nameMap = <int, String>{};
+  final typeMap = <int, AssetType>{};
+  final currencyMap = <int, String>{};
+
+  for (final portfolio in portfolios) {
+    final portfolioAssets =
+        await ref.watch(portfolioAssetsStreamProvider(portfolio.id).future);
+    final prices =
+        await ref.watch(portfolioPricesProvider(portfolio.id).future);
+    final txFutures = portfolioAssets
+        .map((pa) => ref.watch(transactionsStreamProvider(pa.id).future));
+    final allTx = await Future.wait(txFutures);
+
+    for (int i = 0; i < portfolioAssets.length; i++) {
+      final pa = portfolioAssets[i];
+      final holdings =
+          FinancialCalculator.calculateHoldings(transactions: allTx[i]);
+      holdingsMap[pa.assetId] = (holdingsMap[pa.assetId] ?? 0) + holdings;
+      priceMap[pa.assetId] =
+          prices[pa.assetId] ?? pa.asset?.lastPrice ?? 0;
+      if (!symbolMap.containsKey(pa.assetId)) {
+        symbolMap[pa.assetId] = pa.asset?.symbol ?? '';
+        nameMap[pa.assetId] = pa.asset?.name ?? '';
+        typeMap[pa.assetId] = pa.asset?.assetType ?? AssetType.usStock;
+        currencyMap[pa.assetId] =
+            (pa.asset?.currency ?? 'KRW').toUpperCase();
+      }
+    }
+  }
+
+  double totalKrw = 0;
+  final valueMap = <int, double>{};
+  for (final entry in holdingsMap.entries) {
+    final id = entry.key;
+    final price = priceMap[id] ?? 0;
+    final currency = currencyMap[id] ?? 'KRW';
+    final krwVal = _toKrw(entry.value * price, currency, fxRates);
+    valueMap[id] = krwVal;
+    if (krwVal > 0) totalKrw += krwVal;
+  }
+
+  final result = <GlobalAssetSummary>[];
+  for (final entry in holdingsMap.entries) {
+    final id = entry.key;
+    final krwVal = valueMap[id] ?? 0;
+    if (krwVal <= 0) continue;
+    result.add(GlobalAssetSummary(
+      assetId: id,
+      symbol: symbolMap[id] ?? '',
+      name: nameMap[id] ?? '',
+      assetType: typeMap[id] ?? AssetType.usStock,
+      currency: currencyMap[id] ?? 'KRW',
+      totalHoldings: entry.value,
+      currentPrice: priceMap[id] ?? 0,
+      totalValueKrw: krwVal,
+      weight: totalKrw > 0 ? krwVal / totalKrw : 0,
+    ));
+  }
+
+  result.sort((a, b) => b.totalValueKrw.compareTo(a.totalValueKrw));
+  return result;
+});
+
+/// 특정 포트폴리오 목록의 자산을 assetId 기준으로 합산. (묶음 자산 보기용)
+final bundleAssetsProvider =
+    FutureProvider.family<List<GlobalAssetSummary>, List<int>>((ref, portfolioIds) async {
+  final fxRates = await ref.watch(fxRatesProvider.future);
+
+  final holdingsMap = <int, double>{};
+  final priceMap = <int, double>{};
+  final symbolMap = <int, String>{};
+  final nameMap = <int, String>{};
+  final typeMap = <int, AssetType>{};
+  final currencyMap = <int, String>{};
+
+  for (final portfolioId in portfolioIds) {
+    final portfolioAssets =
+        await ref.watch(portfolioAssetsStreamProvider(portfolioId).future);
+    final prices =
+        await ref.watch(portfolioPricesProvider(portfolioId).future);
+    final txFutures = portfolioAssets
+        .map((pa) => ref.watch(transactionsStreamProvider(pa.id).future));
+    final allTx = await Future.wait(txFutures);
+
+    for (int i = 0; i < portfolioAssets.length; i++) {
+      final pa = portfolioAssets[i];
+      final holdings =
+          FinancialCalculator.calculateHoldings(transactions: allTx[i]);
+      holdingsMap[pa.assetId] = (holdingsMap[pa.assetId] ?? 0) + holdings;
+      priceMap[pa.assetId] =
+          prices[pa.assetId] ?? pa.asset?.lastPrice ?? 0;
+      if (!symbolMap.containsKey(pa.assetId)) {
+        symbolMap[pa.assetId] = pa.asset?.symbol ?? '';
+        nameMap[pa.assetId] = pa.asset?.name ?? '';
+        typeMap[pa.assetId] = pa.asset?.assetType ?? AssetType.usStock;
+        currencyMap[pa.assetId] =
+            (pa.asset?.currency ?? 'KRW').toUpperCase();
+      }
+    }
+  }
+
+  double totalKrw = 0;
+  final valueMap = <int, double>{};
+  for (final entry in holdingsMap.entries) {
+    final id = entry.key;
+    final price = priceMap[id] ?? 0;
+    final currency = currencyMap[id] ?? 'KRW';
+    final krwVal = _toKrw(entry.value * price, currency, fxRates);
+    valueMap[id] = krwVal;
+    if (krwVal > 0) totalKrw += krwVal;
+  }
+
+  final result = <GlobalAssetSummary>[];
+  for (final entry in holdingsMap.entries) {
+    final id = entry.key;
+    final krwVal = valueMap[id] ?? 0;
+    if (krwVal <= 0) continue;
+    result.add(GlobalAssetSummary(
+      assetId: id,
+      symbol: symbolMap[id] ?? '',
+      name: nameMap[id] ?? '',
+      assetType: typeMap[id] ?? AssetType.usStock,
+      currency: currencyMap[id] ?? 'KRW',
+      totalHoldings: entry.value,
+      currentPrice: priceMap[id] ?? 0,
+      totalValueKrw: krwVal,
+      weight: totalKrw > 0 ? krwVal / totalKrw : 0,
+    ));
+  }
+
+  result.sort((a, b) => b.totalValueKrw.compareTo(a.totalValueKrw));
+  return result;
 });

@@ -128,7 +128,7 @@ class PriceRepositoryImpl implements PriceRepository {
           price = quote?.price;
           previousClose = quote?.previousClose;
         case AssetType.gold:
-          final quote = await _yahoo.fetchCurrentPrice('XAUUSD=X');
+          final quote = await _yahoo.fetchCurrentPrice('GC=F');
           if (quote != null) {
             price = quote.price / _troyOzPerGram;
             if (quote.previousClose != null) {

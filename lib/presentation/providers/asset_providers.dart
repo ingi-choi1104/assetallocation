@@ -91,9 +91,8 @@ class AssetSearchNotifier extends StateNotifier<AssetSearchState> {
         qLower == 'gc=f' || q.toUpperCase() == 'GC=F';
 
     if (isGoldQuery && (type == null || type == AssetType.gold)) {
-      // 현물 카테고리에는 금 현물(GC=F)만 포함
       const goldList = {
-        'GC=F': '금 현물 (Gold Spot, USD/g)',
+        'GC=F': '금 (Gold, USD/oz)',
       };
       for (final e in goldList.entries) {
         if (seenSymbols.contains(e.key)) continue;
@@ -113,13 +112,14 @@ class AssetSearchNotifier extends StateNotifier<AssetSearchState> {
     final isCashFilter = type == AssetType.cash;
     final isCashKeyword = !isCashFilter &&
         (q == '현금' ||
-            q == '원화' ||
-            q == '달러' ||
-            q == '원' ||
-            q == '달러화' ||
+            q == '원화' || q == '원' ||
+            q == '달러' || q == '달러화' ||
+            q == '유로' ||
+            q == '엔화' || q == '엔' ||
+            q == '위안화' || q == '위안' ||
             qLower == 'cash' ||
-            qLower == 'krw' ||
-            qLower == 'usd');
+            qLower == 'krw' || qLower == 'usd' ||
+            qLower == 'eur' || qLower == 'jpy' || qLower == 'cny');
     if (isCashFilter || isCashKeyword) {
       results.add(Asset(
         id: 0,
@@ -135,6 +135,30 @@ class AssetSearchNotifier extends StateNotifier<AssetSearchState> {
         name: '달러 현금 (USD)',
         assetType: AssetType.cash,
         currency: 'USD',
+        createdAt: DateTime.now(),
+      ));
+      results.add(Asset(
+        id: 0,
+        symbol: 'EUR_CASH',
+        name: '유로 현금 (EUR)',
+        assetType: AssetType.cash,
+        currency: 'EUR',
+        createdAt: DateTime.now(),
+      ));
+      results.add(Asset(
+        id: 0,
+        symbol: 'JPY_CASH',
+        name: '엔화 현금 (JPY)',
+        assetType: AssetType.cash,
+        currency: 'JPY',
+        createdAt: DateTime.now(),
+      ));
+      results.add(Asset(
+        id: 0,
+        symbol: 'CNY_CASH',
+        name: '위안화 현금 (CNY)',
+        assetType: AssetType.cash,
+        currency: 'CNY',
         createdAt: DateTime.now(),
       ));
       if (isCashFilter) return results;

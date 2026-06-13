@@ -105,7 +105,7 @@ const _steps = [
     emoji: '💾',
     title: '데이터 백업 & 복원',
     body: '여기서 데이터를 JSON 파일로\n내보내거나 복원할 수 있어요!\n기기 교체 전에 꼭 백업해두세요 🛡',
-    tab: 1,
+    tab: 2,
   ),
   _Step(
     emoji: '🎯',

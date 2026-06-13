@@ -134,3 +134,40 @@ final priceChangeProvider =
   final repo = ref.watch(priceRepositoryProvider);
   return repo.getPriceChange(assetId);
 });
+
+// ── Multi-currency FX rates (→ KRW) ──────────────────────────────────────────
+
+/// Fetches EUR, JPY, CNY → KRW rates from Yahoo Finance; falls back to
+/// hardcoded values on failure. USD rate is reused from usdKrwRateProvider.
+final fxRatesProvider = FutureProvider<Map<String, double>>((ref) async {
+  final usdRate = await ref.watch(usdKrwRateProvider.future);
+  final yahoo = ref.watch(yahooFinanceDsProvider);
+
+  final rates = <String, double>{'KRW': 1.0, 'USD': usdRate};
+
+  const fallbacks = {'EUR': 1550.0, 'JPY': 9.5, 'CNY': 195.0};
+  for (final e in fallbacks.entries) {
+    try {
+      final quote = await yahoo.fetchCurrentPrice('${e.key}KRW=X');
+      final price = quote?.price;
+      rates[e.key] = (price != null && price > 0) ? price : e.value;
+    } catch (_) {
+      rates[e.key] = e.value;
+    }
+  }
+
+  return rates;
+});
+
+/// Synchronous FX rates — safe to use in synchronous providers and widgets.
+final fxRatesSyncProvider = Provider<Map<String, double>>((ref) {
+  final async = ref.watch(fxRatesProvider);
+  if (async.hasValue) return async.value!;
+  return {
+    'KRW': 1.0,
+    'USD': ref.watch(usdKrwRateSyncProvider),
+    'EUR': 1550.0,
+    'JPY': 9.5,
+    'CNY': 195.0,
+  };
+});
