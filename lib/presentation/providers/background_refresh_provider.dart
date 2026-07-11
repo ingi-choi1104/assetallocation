@@ -15,10 +15,6 @@ import 'price_providers.dart';
 class LivePriceOverrideNotifier extends StateNotifier<Map<int, double>> {
   LivePriceOverrideNotifier() : super(const {});
 
-  void setPrice(int assetId, double price) {
-    state = {...state, assetId: price};
-  }
-
   void setPrices(Map<int, double> prices) {
     if (prices.isEmpty) return;
     state = {...state, ...prices};
@@ -39,6 +35,7 @@ class BackgroundPriceRefreshNotifier extends StateNotifier<bool> {
   final Ref _ref;
   Timer? _timer;
   bool _isRefreshing = false;
+  DateTime? _lastRefresh;
 
   BackgroundPriceRefreshNotifier(this._ref) : super(false);
 
@@ -46,6 +43,18 @@ class BackgroundPriceRefreshNotifier extends StateNotifier<bool> {
   void start() {
     refreshNow();
     _timer = Timer.periodic(const Duration(minutes: 5), (_) => refreshNow());
+  }
+
+  /// Refresh when the app returns to the foreground, but only if the last
+  /// refresh is older than [minInterval]. Android suspends the periodic timer
+  /// while backgrounded, so without this a resumed app shows stale prices
+  /// until the next tick.
+  void refreshOnResume({
+    Duration minInterval = const Duration(seconds: 30),
+  }) {
+    final last = _lastRefresh;
+    if (last != null && DateTime.now().difference(last) < minInterval) return;
+    refreshNow();
   }
 
   /// Trigger an immediate refresh (also used by manual sync button).
@@ -76,16 +85,33 @@ class BackgroundPriceRefreshNotifier extends StateNotifier<bool> {
         }
       }
 
-      // Non-crypto: throttled at 3 concurrent requests
-      await _throttledFetch(otherAssets, repo, liveNotifier, maxConcurrent: 3);
+      // Prices are fetched WITHOUT per-asset DB writes and flushed to the UI in
+      // a single batched state update. The DB is persisted once at the end.
+      // (Writing lastPrice per asset re-fires the assets-table Drift stream,
+      // recomputing every portfolio's metrics N times — the source of the jank.)
 
-      // Crypto: sequential (CoinGecko rate limit)
-      for (final assetId in cryptoAssets) {
-        final price = await repo.fetchCurrentPrice(assetId);
-        if (price != null && mounted) {
-          liveNotifier.setPrice(assetId, price);
-        }
+      // Non-crypto: throttled at 3 concurrent requests.
+      final results = <PriceFetchResult>[];
+      await _throttledFetch(otherAssets, repo, results, maxConcurrent: 3);
+      if (mounted && results.isNotEmpty) {
+        liveNotifier
+            .setPrices({for (final r in results) r.assetId: r.price});
       }
+
+      // Crypto: sequential (CoinGecko rate limit), flushed as one batch.
+      final cryptoResults = <PriceFetchResult>[];
+      for (final assetId in cryptoAssets) {
+        final r = await repo.fetchQuoteNoPersist(assetId);
+        if (r != null) cryptoResults.add(r);
+      }
+      if (mounted && cryptoResults.isNotEmpty) {
+        liveNotifier
+            .setPrices({for (final r in cryptoResults) r.assetId: r.price});
+      }
+
+      // Persist everything in ONE batched DB write → a single stream emission
+      // instead of one per asset.
+      await repo.persistPrices([...results, ...cryptoResults]);
 
       await _ref.read(settingsLocalDsProvider).setLastSyncTime(DateTime.now());
 
@@ -94,15 +120,19 @@ class BackgroundPriceRefreshNotifier extends StateNotifier<bool> {
     } catch (_) {
       // Silent fail — cached prices remain visible
     } finally {
+      _lastRefresh = DateTime.now();
       _isRefreshing = false;
       if (mounted) state = false;
     }
   }
 
+  /// Fetches prices for [assetIds] with at most [maxConcurrent] in-flight
+  /// requests, accumulating results into [results] (not persisted or applied to
+  /// state here — the caller flushes to the UI and persists in single batches).
   Future<void> _throttledFetch(
     List<int> assetIds,
     PriceRepositoryImpl repo,
-    LivePriceOverrideNotifier liveNotifier, {
+    List<PriceFetchResult> results, {
     required int maxConcurrent,
   }) async {
     if (assetIds.isEmpty) return;
@@ -115,9 +145,9 @@ class BackgroundPriceRefreshNotifier extends StateNotifier<bool> {
       while (running < maxConcurrent && nextIndex < assetIds.length) {
         final assetId = assetIds[nextIndex++];
         running++;
-        repo.fetchCurrentPrice(assetId).then((price) {
-          if (price != null && mounted) {
-            liveNotifier.setPrice(assetId, price);
+        repo.fetchQuoteNoPersist(assetId).then((r) {
+          if (r != null) {
+            results.add(r);
           }
         }).whenComplete(() {
           running--;

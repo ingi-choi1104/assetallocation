@@ -18,6 +18,7 @@ import '../../../domain/entities/portfolio_bundle.dart';
 import '../../widgets/tutorial_overlay.dart';
 import '../settings/settings_screen.dart';
 import '../dividend/dividend_screen.dart';
+import '../tax/tax_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -38,20 +39,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     backupSection: GlobalKey(),
   );
 
-  static const _tabs = [
+  static Widget _pieIcon() => CustomPaint(
+        size: const Size(24, 24),
+        painter: _TriColorPiePainter(),
+      );
+
+  static final _tabs = [
     NavigationDestination(
-      icon: Icon(Icons.pie_chart_outline),
-      selectedIcon: Icon(Icons.pie_chart),
+      icon: _pieIcon(),
+      selectedIcon: _pieIcon(),
       label: '포트폴리오',
     ),
-    NavigationDestination(
-      icon: Icon(Icons.savings_outlined),
-      selectedIcon: Icon(Icons.savings),
+    const NavigationDestination(
+      icon: Icon(Icons.savings_outlined, color: Color(0xFFE91E63)),
+      selectedIcon: Icon(Icons.savings, color: Color(0xFFE91E63)),
       label: '배당',
     ),
-    NavigationDestination(
-      icon: Icon(Icons.settings_outlined),
-      selectedIcon: Icon(Icons.settings),
+    const NavigationDestination(
+      icon: Icon(Icons.receipt_long_outlined, color: Color(0xFFE65100)),
+      selectedIcon: Icon(Icons.receipt_long, color: Color(0xFFE65100)),
+      label: '세금',
+    ),
+    const NavigationDestination(
+      icon: Icon(Icons.settings_outlined, color: Color(0xFF757575)),
+      selectedIcon: Icon(Icons.settings, color: Color(0xFF757575)),
       label: '설정',
     ),
   ];
@@ -76,6 +87,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         children: [
           _PortfolioListTab(tutorialKeys: _tutorialKeys),
           const DividendScreen(),
+          const TaxScreen(),
           SettingsScreen(
             onShowTutorial: () => showTutorialOverlay(context, _tutorialKeys,
                 onTabSwitch: (tab) => setState(() => _selectedTab = tab)),
@@ -86,6 +98,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedTab,
         onDestinationSelected: (i) => setState(() => _selectedTab = i),
+        indicatorColor: Colors.transparent,
         destinations: _tabs,
       ),
     );
@@ -312,7 +325,7 @@ class _GlobalSummaryCard extends ConsumerWidget {
             children: [
               Row(
                 children: [
-                  const Text('전체 포트폴리오',
+                  const Text('전체 자산',
                       style: TextStyle(fontSize: 13, color: Colors.grey)),
                   if (metricsAsync.isLoading) ...[
                     const SizedBox(width: 8),
@@ -365,10 +378,89 @@ class _GlobalSummaryCard extends ConsumerWidget {
                   ],
                 ),
               ],
+              const SizedBox(height: 12),
+              _AssetClassBar(ref: ref),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+// ── 자산 클래스 분류 막대 ─────────────────────────────────────────────────────
+
+class _AssetClassBar extends StatelessWidget {
+  final WidgetRef ref;
+  const _AssetClassBar({required this.ref});
+
+  static const _stockColor = Color(0xFF1976D2);  // 주식 - 파랑
+  static const _bondColor  = Color(0xFF388E3C);  // 채권 - 초록
+  static const _realColor  = Color(0xFFF57C00);  // 실물자산 - 주황
+  static const _cashColor  = Color(0xFF9E9E9E);  // 현금 - 회색
+
+  @override
+  Widget build(BuildContext context) {
+    final allocAsync = ref.watch(assetClassAllocationProvider);
+    final alloc = allocAsync.valueOrNull;
+    if (alloc == null || !alloc.hasData) return const SizedBox.shrink();
+
+    final total = alloc.total;
+
+    // 비율 계산 (0이면 제외)
+    final segments = <({Color color, String label, double value})>[
+      (color: _stockColor, label: '주식',   value: alloc.stockKrw),
+      (color: _bondColor,  label: '채권',   value: alloc.bondKrw),
+      (color: _realColor,  label: '실물',   value: alloc.realKrw),
+      (color: _cashColor,  label: '현금',   value: alloc.cashKrw),
+    ].where((s) => s.value > 0).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 가로 막대
+        ClipRRect(
+          borderRadius: BorderRadius.circular(5),
+          child: SizedBox(
+            height: 18,
+            child: Row(
+              children: segments.map((s) {
+                return Expanded(
+                  flex: (s.value / total * 1000).round(),
+                  child: Container(color: s.color),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        // 범례
+        Wrap(
+          spacing: 12,
+          runSpacing: 2,
+          children: segments.map((s) {
+            final pct = s.value / total * 100;
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: s.color,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '${s.label} ${pct.toStringAsFixed(0)}%',
+                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+              ],
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 }
@@ -570,6 +662,10 @@ class _IndicatorTile extends StatelessWidget {
         if (price >= 10) return _comma2.format(price);
         return price.toStringAsFixed(3);
       case IndicatorCategory.commodity:
+        // 원화 단위(금 원/g, 은 원/oz)는 ₩로, 그 외(유가·구리 등)는 $로.
+        if (indicator.def.unit.contains('원')) {
+          return '₩${_comma0.format(price)}';
+        }
         if (price >= 1000) return '\$${_comma1.format(price)}';
         return '\$${_comma2.format(price)}';
       case IndicatorCategory.stockIndex:
@@ -1500,3 +1596,68 @@ class _TypeTile extends StatelessWidget {
 }
 
 enum _PortfolioType { static_, dynamic }
+
+// ── 3색 파이 아이콘 ────────────────────────────────────────────────────────────
+class _TriColorPiePainter extends CustomPainter {
+  static const _blue   = Color(0xFF1976D2);
+  static const _red    = Color(0xFFD32F2F);
+  static const _yellow = Color(0xFFFFC107);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final r  = size.width / 2;
+    final rect = Rect.fromCircle(center: Offset(cx, cy), radius: r);
+    const pi = _pi;
+
+    final segments = [
+      (color: _blue,   start: -pi / 2,              sweep: 2 * pi / 3),
+      (color: _red,    start: -pi / 2 + 2 * pi / 3, sweep: 2 * pi / 3),
+      (color: _yellow, start: -pi / 2 + 4 * pi / 3, sweep: 2 * pi / 3),
+    ];
+
+    for (final s in segments) {
+      canvas.drawArc(rect, s.start, s.sweep, true,
+          Paint()..color = s.color);
+    }
+
+    // 얇은 흰 구분선
+    final divPaint = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 1.2
+      ..style = PaintingStyle.stroke;
+    for (final s in segments) {
+      final dx = r * _cos(s.start);
+      final dy = r * _sin(s.start);
+      canvas.drawLine(Offset(cx, cy), Offset(cx + dx, cy + dy), divPaint);
+    }
+  }
+
+  // Taylor series cos/sin to avoid dart:math import in this file
+  static const _pi = 3.141592653589793;
+
+  static double _cos(double x) {
+    x = x % (2 * _pi);
+    double t = 1, result = 1;
+    for (int i = 1; i <= 8; i++) {
+      t *= -x * x / ((2 * i - 1) * (2 * i));
+      result += t;
+    }
+    return result;
+  }
+
+  static double _sin(double x) {
+    x = x % (2 * _pi);
+    double t = x, result = x;
+    for (int i = 1; i <= 8; i++) {
+      t *= -x * x / ((2 * i) * (2 * i + 1));
+      result += t;
+    }
+    return result;
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+

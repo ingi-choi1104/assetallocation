@@ -92,7 +92,7 @@ class AssetSearchNotifier extends StateNotifier<AssetSearchState> {
 
     if (isGoldQuery && (type == null || type == AssetType.gold)) {
       const goldList = {
-        'GC=F': '금 (Gold, USD/oz)',
+        'GC=F': '금 (KRX 금현물, 원/g)',
       };
       for (final e in goldList.entries) {
         if (seenSymbols.contains(e.key)) continue;
@@ -102,7 +102,7 @@ class AssetSearchNotifier extends StateNotifier<AssetSearchState> {
           symbol: e.key,
           name: e.value,
           assetType: AssetType.gold,
-          currency: 'USD',
+          currency: 'KRW', // 국내 금 현물은 원/g
           createdAt: DateTime.now(),
         ));
       }

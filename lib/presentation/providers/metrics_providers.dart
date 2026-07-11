@@ -329,6 +329,10 @@ final portfolioDailyChangeProvider =
   final weightsAsync = ref.watch(portfolioWeightsProvider(portfolioId));
   final repo = ref.watch(priceRepositoryProvider);
   final fxRates = ref.watch(fxRatesSyncProvider);
+  // Rebuild when background refresh updates live prices — repo._priceChangeCache
+  // is refreshed just before livePriceOverrideProvider emits, so watching it
+  // keeps the daily-change figure in sync with the total value.
+  ref.watch(livePriceOverrideProvider);
 
   final assets = assetsAsync.value;
   final gaps = weightsAsync.value;
@@ -964,6 +968,91 @@ final globalAssetsProvider =
 
   result.sort((a, b) => b.totalValueKrw.compareTo(a.totalValueKrw));
   return result;
+});
+
+// ── 자산 클래스 분류 (주식/채권/실물자산/현금) ──────────────────────────────────
+
+enum AssetClass { stock, bond, real, cash }
+
+const _usBondSymbols = {
+  'TLT', 'IEF', 'SHY', 'BND', 'AGG', 'LQD', 'HYG', 'TIP', 'GOVT',
+  'VGIT', 'VGLT', 'SCHZ', 'VCIT', 'VCLT', 'BSV', 'BIV', 'BLV',
+  'EMB', 'MBB', 'VMBS', 'SJNK', 'ANGL', 'MUB', 'HYD', 'IGIB', 'IGLB',
+  'BNDX', 'BNDW', 'IAGG', 'FALN', 'USHY', 'SHYG', 'HYLD', 'JNK',
+  'HYLB', 'HYXU', 'PICB', 'IBND', 'BWX', 'IGOV',
+  // 추가
+  'LTPZ', 'EMLC', 'LEMB', 'PCY', 'EBND', 'FEMB', 'EMHY', 'VWOB',
+  'FLRN', 'SRLN', 'BKLN', 'LMBS', 'SPMB', 'PHB', 'PFIG',
+  'IGSB', 'STIP', 'PIMIX', 'BOND', 'FBND',
+};
+
+const _usCashSymbols = {
+  'BIL', 'SHV', 'SGOV', 'USFR', 'MINT', 'ICSH', 'JPST', 'FLOT',
+  'GBIL', 'GSY', 'CLTL', 'TFLO', 'PULS', 'NEAR', 'ULST',
+};
+
+const _usRealSymbols = {
+  'GLD', 'IAU', 'GLDM', 'BAR', 'SLV', 'SIVR', 'DBC', 'GSG', 'PDBC',
+  'USO', 'BNO', 'UGA', 'CORN', 'SOYB', 'WEAT', 'JO', 'NIB', 'SGG',
+  'CPER', 'PALL', 'PPLT', 'DJP', 'WOOD', 'GUNR', 'PICK',
+  'REMX', 'SLX', 'COPX', 'COMT', 'FTGC', 'RJI', 'COMB',
+};
+
+const _krBondKeywords = ['채권', '국채', '국고채', '통안채', '회사채', '단기채', '물가채', '하이일드'];
+const _krRealKeywords = ['금현물', '원자재', '농산물', '유가', '원유', '구리', '은현물', '곡물', '리츠', 'REIT'];
+const _krCashKeywords = ['MMF', '단기자금', '머니마켓', '유동성'];
+
+AssetClass classifyAsset(AssetType type, String symbol, String name) {
+  switch (type) {
+    case AssetType.gold:   return AssetClass.real;
+    case AssetType.crypto: return AssetClass.real;
+    case AssetType.cash:   return AssetClass.cash;
+    case AssetType.usStock:
+      final sym = symbol.toUpperCase();
+      if (_usBondSymbols.contains(sym)) return AssetClass.bond;
+      if (_usCashSymbols.contains(sym)) return AssetClass.cash;
+      if (_usRealSymbols.contains(sym)) return AssetClass.real;
+      return AssetClass.stock;
+    case AssetType.krStock:
+    case AssetType.krFund:
+      for (final kw in _krBondKeywords) { if (name.contains(kw)) return AssetClass.bond; }
+      for (final kw in _krRealKeywords) { if (name.contains(kw)) return AssetClass.real; }
+      for (final kw in _krCashKeywords) { if (name.contains(kw)) return AssetClass.cash; }
+      return AssetClass.stock;
+  }
+}
+
+class AssetClassAllocation {
+  final double stockKrw;
+  final double bondKrw;
+  final double realKrw;
+  final double cashKrw;
+
+  const AssetClassAllocation({
+    required this.stockKrw,
+    required this.bondKrw,
+    required this.realKrw,
+    required this.cashKrw,
+  });
+
+  double get total => stockKrw + bondKrw + realKrw + cashKrw;
+  bool get hasData => total > 0;
+}
+
+final assetClassAllocationProvider =
+    FutureProvider<AssetClassAllocation>((ref) async {
+  final assets = await ref.watch(globalAssetsProvider.future);
+  double stock = 0, bond = 0, real = 0, cash = 0;
+  for (final a in assets) {
+    switch (classifyAsset(a.assetType, a.symbol, a.name)) {
+      case AssetClass.stock: stock += a.totalValueKrw;
+      case AssetClass.bond:  bond  += a.totalValueKrw;
+      case AssetClass.real:  real  += a.totalValueKrw;
+      case AssetClass.cash:  cash  += a.totalValueKrw;
+    }
+  }
+  return AssetClassAllocation(
+      stockKrw: stock, bondKrw: bond, realKrw: real, cashKrw: cash);
 });
 
 /// 특정 포트폴리오 목록의 자산을 assetId 기준으로 합산. (묶음 자산 보기용)

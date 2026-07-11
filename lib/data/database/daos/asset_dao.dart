@@ -45,6 +45,43 @@ class AssetDao extends DatabaseAccessor<AppDatabase>
         ),
       );
 
+  /// Writes many price updates in a single batch so Drift emits only ONE
+  /// change notification for the assets table (instead of one per asset).
+  /// Prevents a stream/rebuild storm during background price refresh.
+  Future<void> updatePricesBatch(
+    Map<int, ({double price, double? previousClose})> updates,
+  ) async {
+    if (updates.isEmpty) return;
+    final now = DateTime.now();
+    await batch((b) {
+      updates.forEach((id, v) {
+        b.update(
+          assets,
+          AssetsCompanion(
+            lastPrice: Value(v.price),
+            lastPreviousClose: Value(v.previousClose),
+            lastPriceUpdatedAt: Value(now),
+          ),
+          where: (a) => a.id.equals(id),
+        );
+      });
+    });
+  }
+
+  /// One-time migration: gold assets are now priced as 국내 금 현물 (KRX, 원/g),
+  /// so their currency must be KRW instead of the old USD/oz basis. The stale
+  /// USD lastPrice is cleared so a wrong value isn't shown before the next
+  /// price refresh repopulates it in KRW/gram.
+  Future<void> migrateGoldCurrencyToKrw() async {
+    await (update(assets)
+          ..where((a) => a.assetType.equals('gold') & a.currency.equals('USD')))
+        .write(const AssetsCompanion(
+      currency: Value('KRW'),
+      lastPrice: Value(null),
+      lastPreviousClose: Value(null),
+    ));
+  }
+
   Future<void> updateNameBySymbol(String symbol, String name) =>
       (update(assets)..where((a) => a.symbol.equals(symbol)))
           .write(AssetsCompanion(name: Value(name)));

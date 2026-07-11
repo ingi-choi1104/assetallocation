@@ -11,8 +11,10 @@ import '../../../domain/entities/asset.dart';
 import '../../../domain/entities/dynamic_allocation.dart';
 import '../../../domain/entities/investment.dart';
 import '../../../domain/entities/portfolio.dart';
+import '../../../domain/entities/portfolio_account_type.dart';
 import '../../../domain/entities/portfolio_asset.dart';
 import '../../../domain/enums/asset_type.dart';
+import '../../providers/account_type_providers.dart';
 import '../../providers/asset_providers.dart';
 import '../../providers/database_providers.dart';
 import '../../providers/dynamic_allocation_providers.dart';
@@ -764,6 +766,9 @@ class _MetricsCard extends ConsumerWidget {
           : (pct < 0 ? const Color(0xFF1565C0) : Colors.grey);
     }
 
+    final accountType = ref.watch(accountTypeNotifierProvider
+        .select((m) => m[portfolioId] ?? PortfolioAccountType.general));
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Padding(
@@ -771,9 +776,15 @@ class _MetricsCard extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              '성과 지표',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            Row(
+              children: [
+                const Text(
+                  '성과 지표',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                _AccountTypeChips(portfolioId: portfolioId, current: accountType),
+              ],
             ),
             const SizedBox(height: 12),
             Row(
@@ -2357,6 +2368,59 @@ class _RegenerateSheetState extends ConsumerState<_RegenerateSheet> {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ── 계좌 유형 선택 칩 ─────────────────────────────────────────────────────────
+
+class _AccountTypeChips extends ConsumerWidget {
+  final int portfolioId;
+  final PortfolioAccountType current;
+
+  const _AccountTypeChips(
+      {required this.portfolioId, required this.current});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: PortfolioAccountType.values.map((t) {
+        final selected = t == current;
+        return Padding(
+          padding: const EdgeInsets.only(left: 4),
+          child: GestureDetector(
+            onTap: () => ref
+                .read(accountTypeNotifierProvider.notifier)
+                .setType(portfolioId, t),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: selected
+                    ? Theme.of(context).colorScheme.primary
+                    : Colors.transparent,
+                border: Border.all(
+                  color: selected
+                      ? Theme.of(context).colorScheme.primary
+                      : Colors.grey.shade400,
+                ),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                t.label,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: selected ? Colors.white : Colors.grey.shade600,
+                  fontWeight:
+                      selected ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/datasources/local/economic_indicator_local_ds.dart';
 import '../../domain/entities/economic_indicator.dart';
 import 'database_providers.dart';
+import 'price_providers.dart';
 
 // ── Local cache datasource ────────────────────────────────────────────────────
 
@@ -38,8 +39,13 @@ class EconomicIndicatorsNotifier
 
   Future<void> _fetchAll() async {
     final yahoo = _ref.read(yahooFinanceDsProvider);
+    final naver = _ref.read(naverFinanceDsProvider);
     final localDs = _ref.read(economicIndicatorLocalDsProvider);
     final cacheToSave = <String, Map<String, double?>>{};
+
+    // 은(SI=F)은 USD/oz로 조회되므로 환율을 곱해 원/oz로 환산.
+    final usdKrw = await _ref.read(usdKrwRateProvider.future);
+    const usdToKrwSymbols = {'SI=F'};
 
     // Fetch all in batches of 4 concurrent requests
     const batchSize = 4;
@@ -51,10 +57,15 @@ class EconomicIndicatorsNotifier
 
       await Future.wait(batch.map((def) async {
         try {
-          final quote = await yahoo.fetchCurrentPrice(def.symbol);
+          // 국내 금 현물(원/g)은 네이버 marketindex, 그 외는 야후.
+          final quote = def.symbol == 'M04020000'
+              ? await naver.fetchMetalPrice(def.symbol)
+              : await yahoo.fetchCurrentPrice(def.symbol);
           if (quote == null || !mounted) return;
-          final price = quote.price;
-          final prevClose = quote.previousClose;
+          final fx = usdToKrwSymbols.contains(def.symbol) ? usdKrw : 1.0;
+          final price = quote.price * fx;
+          final prevClose =
+              quote.previousClose == null ? null : quote.previousClose! * fx;
           cacheToSave[def.symbol] = {
             'price': price,
             'previousClose': prevClose,

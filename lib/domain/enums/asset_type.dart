@@ -21,8 +21,8 @@ enum AssetType {
   String get currency {
     switch (this) {
       case AssetType.usStock:
-      case AssetType.gold:
         return 'USD';
+      case AssetType.gold: // 국내 금 현물 (KRX) — 원/g
       case AssetType.krStock:
       case AssetType.krFund:
       case AssetType.crypto:

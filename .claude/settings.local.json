@@ -14,7 +14,23 @@
       "Bash(dart run:*)",
       "Bash(ls:*)",
       "Bash(grep:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(find /d/Files/Flutter/assetallocation/lib/data/datasources/remote -type f -name *.dart)",
+      "Bash(flutter build:*)",
+      "Bash(Wait-Content -Path \"C:\\\\Users\\\\no21k\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\D--Files-Flutter-assetallocation\\\\7321ef9e-7b77-4ccd-a662-7b24da98f56c\\\\tasks\\\\bdvgkktyt.output\" -Tail 5)",
+      "Bash(where gh:*)",
+      "Bash(winget list:*)",
+      "Bash(Get-Content \"C:\\\\Users\\\\no21k\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\D--Files-Flutter-assetallocation\\\\5830ab12-bfac-42b4-ad5f-e50c6fed826d\\\\tasks\\\\b6uz3td6x.output\" -Wait -Tail 20)",
+      "Bash(Select-String \"Built|Error|error|✓|Running\")",
+      "Bash(Select-Object -Last 15)",
+      "Bash(gh release create v1.0.3+4 build/app/outputs/bundle/release/app-release.aab --title v1.0.3+4 --notes ':*)",
+      "Bash(Get-ChildItem -Path lib -Recurse -Filter \"*home_screen*\" -ErrorAction SilentlyContinue)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('stockName',''\\) or d.get\\('itemName',''\\) or str\\(d\\)[:300]\\)\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(adb uninstall *)",
+      "Bash(python -c ' *)"
     ]
   }
 }

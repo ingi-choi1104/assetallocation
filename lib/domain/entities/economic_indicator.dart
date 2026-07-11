@@ -67,8 +67,8 @@ const _exchangeRates = <IndicatorDef>[
 ];
 
 const _commodities = <IndicatorDef>[
-  IndicatorDef(symbol: 'GC=F',     label: '금',       category: IndicatorCategory.commodity, unit: 'USD/oz'),
-  IndicatorDef(symbol: 'SI=F',     label: '은',       category: IndicatorCategory.commodity, unit: 'USD/oz'),
+  IndicatorDef(symbol: 'M04020000', label: '금',      category: IndicatorCategory.commodity, unit: '원/g'),
+  IndicatorDef(symbol: 'SI=F',     label: '은',       category: IndicatorCategory.commodity, unit: '원/oz'),
   IndicatorDef(symbol: 'CL=F',     label: 'WTI유가',  category: IndicatorCategory.commodity, unit: 'USD/bbl'),
   IndicatorDef(symbol: 'BZ=F',     label: '두바이유', category: IndicatorCategory.commodity, unit: 'USD/bbl'),
   IndicatorDef(symbol: 'HG=F',     label: '구리',     category: IndicatorCategory.commodity, unit: 'USD/lb'),

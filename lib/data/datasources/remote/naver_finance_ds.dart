@@ -81,8 +81,67 @@ class NaverFinanceDataSource {
     }
   }
 
-  /// Fetches current price only
+  /// Fetches a spot metal price from Naver's market-index API.
+  /// Domestic gold `M04020000` is quoted in KRW/gram; international metals
+  /// (e.g. `GCcv1`) in USD/oz. Returns null on failure.
+  Future<PriceQuote?> fetchMetalPrice(String reutersCode) async {
+    try {
+      final response = await _dio.get(
+        'https://api.stock.naver.com/marketindex/metals/$reutersCode',
+        options: Options(
+          headers: {
+            'User-Agent':
+                'Mozilla/5.0 (Linux; Android 12; Pixel 6) AppleWebKit/537.36',
+            'Referer': 'https://m.stock.naver.com/',
+          },
+          receiveTimeout: const Duration(seconds: 6),
+        ),
+      );
+
+      final data = response.data;
+      if (data == null || data is! Map) return null;
+
+      final price = _parseKrNum(data['closePrice']);
+      if (price == null || price == 0) return null;
+
+      // previousClose: fluctuations is the absolute change; direction comes
+      // from fluctuationsType (RISING / FALLING).
+      double? previousClose;
+      final change = _parseKrNum(data['fluctuations']);
+      if (change != null) {
+        final type = data['fluctuationsType'];
+        final dir = (type is Map) ? (type['name']?.toString() ?? '') : '';
+        final signed = dir == 'FALLING' ? -change : change;
+        previousClose = price - signed;
+      }
+
+      // 국내 금은 '원/g'(KRW/gram), 국제 금속은 'USD/OZS' 등. '/g' 또는 '원'이면 원화.
+      final unit = data['unit']?.toString() ?? '';
+      final currency =
+          (unit.contains('원') || unit.contains('/g')) ? 'KRW' : 'USD';
+
+      return PriceQuote(
+        symbol: reutersCode,
+        price: price,
+        previousClose: previousClose,
+        currency: currency,
+        timestamp: DateTime.now(),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  double? _parseKrNum(dynamic v) =>
+      v == null ? null : double.tryParse(v.toString().replaceAll(',', ''));
+
+  /// Fetches current price: tries real-time mobile API first, falls back to daily close.
   Future<PriceQuote?> fetchCurrentPrice(String symbol) async {
+    // 1) 실시간 현재가 (장 중 반영)
+    final realtime = await _fetchRealtimePrice(symbol);
+    if (realtime != null) return realtime;
+
+    // 2) fallback: 일봉 종가 (장 마감 후 또는 API 실패 시)
     final result = await fetchHistory(symbol, count: 5);
     if (result?.history == null || result!.history!.isEmpty) return null;
 
@@ -96,6 +155,48 @@ class NaverFinanceDataSource {
       currency: 'KRW',
       timestamp: lastBar.date,
     );
+  }
+
+  /// Naver mobile API — returns intraday real-time price during trading hours.
+  Future<PriceQuote?> _fetchRealtimePrice(String symbol) async {
+    try {
+      final response = await _dio.get(
+        'https://m.stock.naver.com/api/stock/$symbol/basic',
+        options: Options(
+          headers: {
+            'User-Agent':
+                'Mozilla/5.0 (Linux; Android 12; Pixel 6) AppleWebKit/537.36',
+            'Referer': 'https://m.stock.naver.com/',
+          },
+          receiveTimeout: const Duration(seconds: 6),
+        ),
+      );
+
+      final data = response.data;
+      if (data == null || data is! Map) return null;
+
+      // closePrice = 현재가 (장 중) 또는 당일 종가
+      final closePriceRaw = data['closePrice']?.toString().replaceAll(',', '');
+      final changeRaw = data['compareToPreviousClosePrice']
+          ?.toString()
+          .replaceAll(',', '');
+
+      final price = double.tryParse(closePriceRaw ?? '');
+      if (price == null || price == 0) return null;
+
+      final change = double.tryParse(changeRaw ?? '');
+      final previousClose = change != null ? price - change : null;
+
+      return PriceQuote(
+        symbol: symbol,
+        price: price,
+        previousClose: previousClose,
+        currency: 'KRW',
+        timestamp: DateTime.now(),
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   PriceQuote? _parseFchartResponse(String symbol, String raw) {

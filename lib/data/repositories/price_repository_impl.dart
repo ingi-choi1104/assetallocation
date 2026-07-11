@@ -10,9 +10,6 @@ import '../datasources/remote/coingecko_ds.dart';
 import '../datasources/remote/fss_ds.dart';
 import '../datasources/local/settings_local_ds.dart';
 
-/// 1 troy oz = 31.1035 grams
-const double _troyOzPerGram = 31.1035;
-
 /// Price change information for an asset
 class PriceChangeInfo {
   final double currentPrice;
@@ -24,6 +21,15 @@ class PriceChangeInfo {
     this.previousClose,
     this.changePercent,
   });
+}
+
+/// A fetched price not yet persisted to the DB. Collected during background
+/// refresh so all prices can be written in a single batch.
+class PriceFetchResult {
+  final int assetId;
+  final double price;
+  final double? previousClose;
+  const PriceFetchResult(this.assetId, this.price, this.previousClose);
 }
 
 class PriceRepositoryImpl implements PriceRepository {
@@ -99,6 +105,68 @@ class PriceRepositoryImpl implements PriceRepository {
     await _db.priceHistoryDao.insertManyOrReplace(companions);
   }
 
+  /// Fetches price/previousClose/changePercent from the network for [asset].
+  /// Pure network call — does NOT touch the DB or the in-memory cache.
+  Future<({double? price, double? previousClose, double? changePercent})>
+      _fetchRaw(AssetRecord asset) async {
+    final assetType = AssetType.fromValue(asset.assetType);
+    double? price;
+    double? previousClose;
+    double? changePercent;
+
+    switch (assetType) {
+      case AssetType.usStock:
+        final quote = await _yahoo.fetchCurrentPrice(asset.symbol);
+        price = quote?.price;
+        previousClose = quote?.previousClose;
+      case AssetType.gold:
+        // 국내 금 현물 (KRX) — KRW/gram
+        final quote = await _naver.fetchMetalPrice('M04020000');
+        price = quote?.price;
+        previousClose = quote?.previousClose;
+      case AssetType.krStock:
+        try {
+          final quote = await _naver.fetchCurrentPrice(asset.symbol);
+          price = quote?.price;
+          previousClose = quote?.previousClose;
+        } catch (_) {}
+        if (price == null) {
+          for (final suffix in ['.KS', '.KQ']) {
+            try {
+              final quote =
+                  await _yahoo.fetchCurrentPrice('${asset.symbol}$suffix');
+              price = quote?.price;
+              previousClose = quote?.previousClose;
+              if (price != null) break;
+            } catch (_) {}
+          }
+        }
+      case AssetType.crypto:
+        final coin = await _coinGecko.fetchCurrentPrice(asset.symbol);
+        price = coin?.priceKrw;
+        if (coin?.changePercent24h != null) {
+          changePercent = coin!.changePercent24h;
+          if (price != null && changePercent != null) {
+            previousClose = price / (1 + changePercent / 100);
+          }
+        }
+      case AssetType.krFund:
+        final apiKey = _settings.getFssApiKey() ?? '';
+        final fundCode = asset.fundCode ?? asset.symbol;
+        final nav = await _fss.fetchFundNav(fundCode, apiKey);
+        price = nav?.nav;
+      case AssetType.cash:
+        price = 1.0;
+        previousClose = 1.0;
+        changePercent = 0.0;
+    }
+
+    if (price != null && previousClose != null && previousClose > 0) {
+      changePercent ??= (price - previousClose) / previousClose * 100;
+    }
+    return (price: price, previousClose: previousClose, changePercent: changePercent);
+  }
+
   @override
   Future<double?> fetchCurrentPrice(int assetId) async {
     final asset = await _db.assetDao.getById(assetId);
@@ -117,73 +185,18 @@ class PriceRepositoryImpl implements PriceRepository {
       return 1.0;
     }
 
-    double? price;
-    double? previousClose;
-    double? changePercent;
-
     try {
-      switch (assetType) {
-        case AssetType.usStock:
-          final quote = await _yahoo.fetchCurrentPrice(asset.symbol);
-          price = quote?.price;
-          previousClose = quote?.previousClose;
-        case AssetType.gold:
-          final quote = await _yahoo.fetchCurrentPrice('GC=F');
-          if (quote != null) {
-            price = quote.price / _troyOzPerGram;
-            if (quote.previousClose != null) {
-              previousClose = quote.previousClose! / _troyOzPerGram;
-            }
-          }
-        case AssetType.krStock:
-          try {
-            final quote = await _naver.fetchCurrentPrice(asset.symbol);
-            price = quote?.price;
-            previousClose = quote?.previousClose;
-          } catch (_) {}
-          if (price == null) {
-            for (final suffix in ['.KS', '.KQ']) {
-              try {
-                final quote =
-                    await _yahoo.fetchCurrentPrice('${asset.symbol}$suffix');
-                price = quote?.price;
-                previousClose = quote?.previousClose;
-                if (price != null) break;
-              } catch (_) {}
-            }
-          }
-        case AssetType.crypto:
-          final coin = await _coinGecko.fetchCurrentPrice(asset.symbol);
-          price = coin?.priceKrw;
-          if (coin?.changePercent24h != null) {
-            changePercent = coin!.changePercent24h;
-            if (price != null && changePercent != null) {
-              previousClose = price / (1 + changePercent / 100);
-            }
-          }
-        case AssetType.krFund:
-          final apiKey = _settings.getFssApiKey() ?? '';
-          final fundCode = asset.fundCode ?? asset.symbol;
-          final nav = await _fss.fetchFundNav(fundCode, apiKey);
-          price = nav?.nav;
-        case AssetType.cash:
-          // Cash is always worth 1 unit of its native currency
-          price = 1.0;
-          previousClose = 1.0;
-          changePercent = 0.0;
-      }
+      final raw = await _fetchRaw(asset);
+      final price = raw.price;
 
       // Persist price and previousClose to DB, update in-memory cache
       if (price != null) {
-        if (previousClose != null && previousClose > 0) {
-          changePercent ??= (price - previousClose) / previousClose * 100;
-        }
         await _db.assetDao.updateLastPriceAndPreviousClose(
-            assetId, price, previousClose);
+            assetId, price, raw.previousClose);
         _priceChangeCache[assetId] = PriceChangeInfo(
           currentPrice: price,
-          previousClose: previousClose,
-          changePercent: changePercent,
+          previousClose: raw.previousClose,
+          changePercent: raw.changePercent,
         );
       }
       return price;
@@ -197,6 +210,48 @@ class PriceRepositoryImpl implements PriceRepository {
       }
       return lp;
     }
+  }
+
+  /// Fetches the current price WITHOUT writing to the DB. Updates only the
+  /// in-memory change cache (non-reactive), so daily-change stays available.
+  /// Returns null if the price could not be fetched.
+  ///
+  /// Background refresh uses this together with [persistPrices] so the assets
+  /// table is written once (a single Drift stream emission) instead of once
+  /// per asset — which otherwise triggers a full metrics-rebuild storm.
+  Future<PriceFetchResult?> fetchQuoteNoPersist(int assetId) async {
+    final asset = await _db.assetDao.getById(assetId);
+    if (asset == null) return null;
+
+    if (AssetType.fromValue(asset.assetType) == AssetType.cash) {
+      _priceChangeCache[assetId] = const PriceChangeInfo(
+        currentPrice: 1.0, previousClose: 1.0, changePercent: 0.0);
+      return const PriceFetchResult(0, 1.0, 1.0);
+    }
+
+    try {
+      final raw = await _fetchRaw(asset);
+      final price = raw.price;
+      if (price == null) return null;
+      _priceChangeCache[assetId] = PriceChangeInfo(
+        currentPrice: price,
+        previousClose: raw.previousClose,
+        changePercent: raw.changePercent,
+      );
+      return PriceFetchResult(assetId, price, raw.previousClose);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Persists a batch of fetched prices in a single DB write (one stream
+  /// notification for the assets table).
+  Future<void> persistPrices(List<PriceFetchResult> results) async {
+    if (results.isEmpty) return;
+    await _db.assetDao.updatePricesBatch({
+      for (final r in results)
+        r.assetId: (price: r.price, previousClose: r.previousClose),
+    });
   }
 
   @override
