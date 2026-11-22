@@ -39,7 +39,7 @@ class AppDatabase extends _$AppDatabase {
       : super(executor ?? driftDatabase(name: 'asset_allocation'));
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -52,6 +52,11 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 3) {
             await m.addColumn(assets, assets.lastPreviousClose);
+          }
+          if (from < 4) {
+            // 계좌 가져오기가 저장해 온 'stock_kr'을 AssetType의 실제 값
+            // 'krStock'으로 통일하고, 그 과정에서 생기는 중복 자산을 병합한다.
+            await assetDao.migrateKrStockAssetType();
           }
         },
       );
