@@ -16,7 +16,8 @@ import '../data/database/app_database.dart';
 /// SharedPreferences keys preserved:
 ///   portfolio_bundles_v1, portfolio_strategies_v1,
 ///   fss_api_key, home_item_order_v1,
-///   excluded_portfolios_v1, excluded_bundles_v1
+///   excluded_portfolios_v1, excluded_bundles_v1,
+///   import_column_mappings_v1
 class BackupService {
   static const int _backupVersion = 1;
 
@@ -33,6 +34,10 @@ class BackupService {
     'excluded_bundles_v1',
     'notifications_enabled',
     'show_krw',
+    'portfolio_account_types_v1',
+    'portfolio_snapshots_v1',
+    // 파일 가져오기에서 사용자가 고친 열 매핑. 안 넣으면 복원 때 사라진다.
+    'import_column_mappings_v1',
   ];
 
   BackupService(this._db, this._prefs);
@@ -64,6 +69,9 @@ class BackupService {
       'prefs': prefsMap,
     };
   }
+
+  /// Public wrapper for cloud sync use.
+  Future<Map<String, dynamic>> buildBackup() => _buildBackup();
 
   /// Exports all data and shares the resulting JSON file.
   Future<void> exportAndShare() async {
@@ -115,7 +123,15 @@ class BackupService {
 
   /// Restores all data from a parsed backup map.
   /// Clears the current database first (irreversible).
+  ///
+  /// 전체를 하나의 트랜잭션으로 묶는다. 그러지 않으면 Drift의 watch 스트림이
+  /// 삭제 직후의 "0건" 상태를 화면에 그대로 내보내, 복원 도중 데이터가
+  /// 사라진 것처럼 보인다.
   Future<void> restore(Map<String, dynamic> backup) async {
+    await _db.transaction(() => _restoreInTransaction(backup));
+  }
+
+  Future<void> _restoreInTransaction(Map<String, dynamic> backup) async {
     // ── 1. Clear DB in reverse-dependency order ──────────────────────────────
     await _db.delete(_db.transactions).go();
     await _db.delete(_db.investments).go();
