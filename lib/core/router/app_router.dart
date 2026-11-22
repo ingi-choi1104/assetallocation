@@ -17,6 +17,9 @@ import '../../presentation/screens/snapshot/snapshot_detail_screen.dart';
 import '../../presentation/screens/global_assets/global_assets_screen.dart';
 import '../../presentation/screens/portfolio_bundle/bundle_assets_screen.dart';
 import '../../domain/entities/dynamic_allocation.dart';
+import '../../presentation/screens/file_import/file_import_screen.dart';
+import '../../presentation/screens/kis/kis_import_screen.dart';
+import '../../presentation/screens/shared_portfolio/shared_portfolio_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -29,6 +32,22 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      // 한국투자증권 OpenAPI로 보유 종목을 불러오는 화면.
+      GoRoute(
+        path: '/kis-import',
+        builder: (context, state) => const KisImportScreen(),
+      ),
+      // CSV·엑셀 표 파일로 보유 종목을 불러오는 화면.
+      GoRoute(
+        path: '/file-import',
+        builder: (context, state) => const FileImportScreen(),
+      ),
+      GoRoute(
+        path: '/shared/:code',
+        builder: (context, state) => SharedPortfolioScreen(
+          code: state.pathParameters['code']!,
+        ),
       ),
       GoRoute(
         path: '/global-assets',
