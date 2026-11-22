@@ -308,6 +308,34 @@ void main() {
       expect(p.rows.single.currentPrice, 80000);
     });
 
+    test('엑셀이 숫자로 저장해 앞의 0이 날아간 종목코드를 6자리로 되살린다', () {
+      final p = _preview(header, [
+        ['5930', '삼성전자', '10', '71200'],
+        ['660', 'SK하이닉스', '3', '180000'],
+      ]);
+      expect(p.rows.map((r) => r.symbol), ['005930', '000660']);
+      expect(p.rows.every((r) => r.assetType == AssetType.krStock), isTrue);
+    });
+
+    test('유형을 미국으로 직접 고르면 종목코드를 건드리지 않는다', () {
+      final p = _preview(
+        header,
+        [
+          ['5930', '뭔가', '10', '100'],
+        ],
+        forcedType: AssetType.usStock,
+      );
+      expect(p.rows.single.symbol, '5930');
+    });
+
+    test('6자리를 넘는 숫자는 채우지 않는다', () {
+      final p = _preview(header, [
+        ['1234567', '뭔가', '10', '100'],
+      ]);
+      expect(p.rows, isEmpty);
+      expect(p.skipCounts[SkipReason.unknownType], 1);
+    });
+
     test('skipCounts는 사유가 없으면 그 키를 담지 않는다', () {
       final p = _preview(header, [
         ['005930', '삼성전자', '10', '71200'],

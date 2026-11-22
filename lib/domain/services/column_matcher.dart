@@ -237,7 +237,10 @@ class ColumnMatcher {
     for (var i = 0; i < table.rows.length; i++) {
       final raw = table.rows[i];
 
-      final symbol = _cell(raw, mapping, ColumnRole.symbol);
+      final symbol = _restoreKrCode(
+        _cell(raw, mapping, ColumnRole.symbol),
+        forcedType,
+      );
       if (symbol.isEmpty) {
         skipped.add(SkippedRow(rowIndex: i, reason: SkipReason.noSymbol));
         continue;
@@ -292,6 +295,19 @@ class ColumnMatcher {
     }
 
     return ImportPreview(rows: rows, skipped: skipped, skipCounts: counts);
+  }
+
+  /// 엑셀이 종목코드를 **숫자 셀**로 저장하면 앞의 0이 날아간다
+  /// (`'005930'` → `5930`). 그러면 [inferType]이 한국 종목으로 못 알아보고
+  /// 파일 전체가 "유형 판단 불가"로 버려진다.
+  ///
+  /// 한국 종목코드는 정확히 6자리이고 미국 티커는 숫자가 아니므로, 숫자만으로
+  /// 된 5자리 이하 코드는 6자리로 채운다. 사용자가 유형을 미국으로 **직접
+  /// 고른** 경우에는 건드리지 않는다.
+  static String _restoreKrCode(String symbol, AssetType? forcedType) {
+    if (forcedType != null && forcedType != AssetType.krStock) return symbol;
+    if (!RegExp(r'^\d{1,5}$').hasMatch(symbol)) return symbol;
+    return symbol.padLeft(6, '0');
   }
 
   static String _cell(
