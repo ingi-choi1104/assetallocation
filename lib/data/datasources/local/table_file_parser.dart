@@ -35,9 +35,21 @@ class TableFileParser {
         '구형 엑셀(.xls) 파일입니다. 엑셀에서 열어 .xlsx로 저장한 뒤 다시 시도해 주세요.',
       );
     }
+    if (_isUtf16(bytes)) {
+      throw const TableParseException(
+        'UTF-16으로 저장된 파일입니다. 엑셀에서 CSV(UTF-8) 또는 .xlsx로 저장한 뒤 다시 시도해 주세요.',
+      );
+    }
     if (isXlsx(bytes)) return _parseXlsx(bytes);
     return _parseCsv(bytes, fileName);
   }
+
+  /// UTF-16 BOM(`FF FE` / `FE FF`). 그냥 두면 CP949 표로 억지로 읽혀
+  /// 전부 깨진 글자가 되고, 모든 줄이 "종목코드 없음"으로 버려진다.
+  static bool _isUtf16(Uint8List bytes) =>
+      bytes.length >= 2 &&
+      ((bytes[0] == 0xFF && bytes[1] == 0xFE) ||
+          (bytes[0] == 0xFE && bytes[1] == 0xFF));
 
   /// `.xlsx`는 ZIP 컨테이너다 — 매직바이트 `PK`로 가린다.
   static bool isXlsx(Uint8List bytes) =>
@@ -76,12 +88,33 @@ class TableFileParser {
   /// 후보로 보고 따옴표 안의 구분자를 세지 않는다. `dynamicTyping: false`로
   /// 모든 셀을 문자열로 받아 [ColumnMatcher]가 정규화하게 한다.
   static ImportTable _parseCsv(Uint8List bytes, String fileName) {
+    final text = decodeCsv(bytes);
+
+    // 증권사 "엑셀 다운로드"가 실제로는 HTML 표인 경우가 많다. 그냥 두면
+    // 거대한 헤더 셀 하나와 0행으로 파싱돼 아무 안내 없이 쓸 수 없게 된다.
+    if (_looksLikeHtml(text)) {
+      throw const TableParseException(
+        '엑셀 파일이 아니라 웹페이지(HTML)입니다. 엑셀에서 열어 .xlsx로 저장한 뒤 다시 시도해 주세요.',
+      );
+    }
+
     final parsed = const CsvDecoder(
       skipEmptyLines: true,
       dynamicTyping: false,
-    ).convert(decodeCsv(bytes));
+    ).convert(text);
 
     return _assemble(_toStringRows(parsed), fileName);
+  }
+
+  static bool _looksLikeHtml(String text) {
+    final head = text.trimLeft();
+    if (!head.startsWith('<')) return false;
+    final lower = head.length > 1024 ? head.substring(0, 1024) : head;
+    final probe = lower.toLowerCase();
+    return probe.contains('<html') ||
+        probe.contains('<table') ||
+        probe.contains('<!doctype') ||
+        probe.contains('<body');
   }
 
   // ── XLSX ───────────────────────────────────────────────────────────────────
@@ -98,6 +131,7 @@ class TableFileParser {
 
     ImportTable? best;
     var bestScore = -1;
+    var bestRowCount = -1;
 
     for (final entry in book.tables.entries) {
       final rows = _toStringRows(
@@ -107,8 +141,15 @@ class TableFileParser {
 
       final table = _assemble(rows, entry.key);
       final score = ColumnMatcher.guessMapping(table.header).length;
-      if (score > bestScore) {
+
+      // 점수가 같으면 **행이 있는 시트**가 이긴다. 증권사 파일은 앞에
+      // '양식'·'안내' 시트를 끼워 넣는데, 그게 헤더만 있으면 점수는 같고
+      // 먼저 나왔다는 이유로 이겨 버려 "0행 인식"이 된다.
+      final better = score > bestScore ||
+          (score == bestScore && table.rows.length > bestRowCount);
+      if (better) {
         bestScore = score;
+        bestRowCount = table.rows.length;
         best = table;
       }
     }
@@ -154,13 +195,22 @@ class TableFileParser {
     }
 
     final headerIndex = ColumnMatcher.findHeaderRow(rows);
-    final header = rows[headerIndex];
-    final body = rows
-        .sublist(headerIndex + 1)
-        .map((r) => _fit(r, header.length))
-        .toList();
+    final rawHeader = rows[headerIndex];
+    final rawBody = rows.sublist(headerIndex + 1);
 
-    return ImportTable(header: header, rows: body, sheetName: sheetName);
+    // 폭은 헤더와 본문 중 가장 넓은 줄에 맞춘다. 헤더에 맞춰 **잘라내면**
+    // 수량·단가가 조용히 사라진다 — 헤더에 빈 자리를 붙여 두고 사용자가
+    // 매핑하게 하는 편이 낫다.
+    var width = rawHeader.length;
+    for (final row in rawBody) {
+      if (row.length > width) width = row.length;
+    }
+
+    return ImportTable(
+      header: _fit(rawHeader, width),
+      rows: rawBody.map((r) => _fit(r, width)).toList(),
+      sheetName: sheetName,
+    );
   }
 
   static List<String> _fit(List<String> row, int width) {

@@ -56,7 +56,18 @@ class AppDatabase extends _$AppDatabase {
           if (from < 4) {
             // 계좌 가져오기가 저장해 온 'stock_kr'을 AssetType의 실제 값
             // 'krStock'으로 통일하고, 그 과정에서 생기는 중복 자산을 병합한다.
-            await assetDao.migrateKrStockAssetType();
+            //
+            // 과거 데이터 청소이므로 **절대 앱 시작을 막아선 안 된다.**
+            // from < 3의 ALTER TABLE에는 IF NOT EXISTS가 없고
+            // setSchemaVersion은 전략이 전부 성공한 뒤에야 돌기 때문에,
+            // 여기서 던지면 버전이 그대로 남아 다음 실행에서
+            // "duplicate column name"으로 영구히 부팅 불가가 된다.
+            // 실패하면 중복 자산이 남을 뿐이고, 그건 사용자가 고칠 수 있다.
+            try {
+              await assetDao.migrateKrStockAssetType();
+            } catch (_) {
+              // 의도적으로 삼킨다 — 위 주석 참조.
+            }
           }
         },
       );

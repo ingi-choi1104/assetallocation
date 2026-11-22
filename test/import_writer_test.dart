@@ -106,7 +106,7 @@ void main() {
         usdKrwRate: 1400,
       );
 
-      expect(count, 1);
+      expect(count.imported, 1);
 
       final asset = await db.assetDao.getBySymbolAndType('005930', 'krStock');
       expect(asset, isNotNull);
@@ -188,7 +188,7 @@ void main() {
         usdKrwRate: 1400,
       );
 
-      expect(count, 1);
+      expect(count.imported, 1);
       expect((await db.select(db.portfolioAssets).get()).length, 1);
       expect(await db.select(db.transactions).get(), isEmpty);
       expect(await db.select(db.investments).get(), isEmpty);
@@ -202,7 +202,7 @@ void main() {
         usdKrwRate: 1400,
       );
 
-      expect(count, 0);
+      expect(count.imported, 0);
       expect(await db.assetDao.getAll(), isEmpty);
       expect(await db.select(db.portfolioAssets).get(), isEmpty);
       expect(await db.select(db.investments).get(), isEmpty);
@@ -240,6 +240,58 @@ void main() {
       expect((await db.select(db.portfolioAssets).get()).length, 2);
     });
 
+    test('새 포트폴리오를 같은 트랜잭션 안에서 만든다', () async {
+      final outcome = await writer.write(
+        newPortfolioName: '잔고',
+        rows: [_kr(qty: 10, price: 71200)],
+        fileName: '잔고.csv',
+        usdKrwRate: 1400,
+      );
+
+      expect(outcome.imported, 1);
+
+      final portfolios = await db.portfolioDao.getAll();
+      expect(portfolios.map((p) => p.name), contains('잔고'));
+      expect(outcome.portfolioId,
+          portfolios.where((p) => p.name == '잔고').first.id);
+    });
+
+    test('쓰기가 실패하면 새 포트폴리오도 남지 않는다', () async {
+      // 존재하지 않는 자산 유형이 아니라, 트랜잭션 자체가 되돌려지는지를
+      // 본다. 실패를 주입하기 위해 포트폴리오 이름을 길이 제한(100자) 초과로
+      // 준다 — Portfolios.name에 withLength(max: 100)가 걸려 있다.
+      final before = (await db.portfolioDao.getAll()).length;
+
+      await expectLater(
+        writer.write(
+          newPortfolioName: 'x' * 101,
+          rows: [_kr(qty: 10, price: 71200)],
+          fileName: 'a.csv',
+          usdKrwRate: 1400,
+        ),
+        throwsA(anything),
+      );
+
+      expect((await db.portfolioDao.getAll()).length, before);
+      expect(await db.assetDao.getAll(), isEmpty);
+      expect(await db.select(db.investments).get(), isEmpty);
+    });
+
+    test('가져올 줄이 없으면 새 포트폴리오도 만들지 않는다', () async {
+      final before = (await db.portfolioDao.getAll()).length;
+
+      final outcome = await writer.write(
+        newPortfolioName: '빈 파일',
+        rows: [],
+        fileName: 'a.csv',
+        usdKrwRate: 1400,
+      );
+
+      expect(outcome.imported, 0);
+      expect(outcome.portfolioId, isNull);
+      expect((await db.portfolioDao.getAll()).length, before);
+    });
+
     test('이미 그 포트폴리오에 연결된 종목이면 터지지 않고 건너뛴다', () async {
       // 화면이 alreadyHeld로 막지만, writer 혼자서도 전체를 실패시키면 안 된다.
       final assetId = await db.into(db.assets).insert(
@@ -263,7 +315,7 @@ void main() {
         usdKrwRate: 1400,
       );
 
-      expect(count, 0);
+      expect(count.imported, 0);
       expect((await db.select(db.portfolioAssets).get()).length, 1);
       expect(await db.select(db.transactions).get(), isEmpty);
     });

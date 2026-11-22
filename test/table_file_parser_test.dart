@@ -188,12 +188,47 @@ void main() {
       expect(table.rows.single, ['005930', '삼성전자', '']);
     });
 
-    test('열이 헤더보다 많은 줄은 잘라낸다', () {
+    test('열이 헤더보다 많으면 헤더를 늘려 데이터를 지키지 않는다', () {
+      // 잘라내면 수량·단가가 조용히 사라진다. 헤더에 빈 자리를 붙여 두고
+      // 사용자가 매핑하게 한다.
       final table = TableFileParser.parse(
-        _utf8('종목코드,수량\n005930,10,군더더기\n'),
+        _utf8('종목코드,수량\n005930,10,71200\n'),
         'a.csv',
       );
-      expect(table.rows.single, ['005930', '10']);
+      expect(table.header, ['종목코드', '수량', '']);
+      expect(table.rows.single, ['005930', '10', '71200']);
+    });
+
+    test('사전에 하나도 안 걸리면 가장 넓은 행을 헤더로 쓴다', () {
+      // 영문·외국 증권사 파일. 첫 줄(제목)을 헤더로 잡으면 _fit이 나머지
+      // 열을 전부 날려 사용자가 매핑할 수조차 없다.
+      final table = TableFileParser.parse(
+        _utf8('해외주식 잔고\nAAA,BBB,CCC\n005930,10,71200\n'),
+        'a.csv',
+      );
+      expect(table.header, ['AAA', 'BBB', 'CCC']);
+      expect(table.rows.single, ['005930', '10', '71200']);
+    });
+
+    test('HTML을 .csv로 받은 파일은 안내 메시지로 떨군다', () {
+      expect(
+        () => TableFileParser.parse(
+          _utf8('<html><body><table><tr><td>005930</td></tr></table>'),
+          '잔고.csv',
+        ),
+        throwsA(isA<TableParseException>()),
+      );
+    });
+
+    test('UTF-16 파일은 깨진 글자 대신 안내 메시지로 떨군다', () {
+      // BOM FF FE. CP949 표로 억지로 읽으면 전부 깨진 글자가 된다.
+      expect(
+        () => TableFileParser.parse(
+          Uint8List.fromList([0xFF, 0xFE, 0x30, 0x00, 0x30, 0x00]),
+          'a.csv',
+        ),
+        throwsA(isA<TableParseException>()),
+      );
     });
 
     test('따옴표 안의 쉼표를 열 구분으로 보지 않는다', () {
@@ -272,6 +307,37 @@ void main() {
           Uint8List.fromList(book.encode()!), 'b.xlsx');
       expect(ColumnMatcher.parseDate(table.rows.single.single),
           DateTime(2025, 3, 4));
+    });
+
+    test('헤더만 있는 양식 시트보다 데이터가 있는 시트를 고른다', () {
+      // 증권사 파일은 앞에 '양식'·'안내' 시트를 끼워 넣는다. 점수가 같으면
+      // 행이 있는 시트가 이겨야 한다.
+      final bytes = _xlsx({
+        '양식': [
+          ['종목코드', '수량'],
+        ],
+        '잔고': [
+          ['종목코드', '수량'],
+          ['005930', '10'],
+          ['000660', '3'],
+        ],
+      });
+
+      final table = TableFileParser.parse(bytes, 'b.xlsx');
+      expect(table.sheetName, '잔고');
+      expect(table.rows.length, 2);
+    });
+
+    test('시트가 하나뿐이고 헤더만 있어도 예외가 아니다', () {
+      final bytes = _xlsx({
+        '잔고': [
+          ['종목코드', '수량'],
+        ],
+      });
+
+      final table = TableFileParser.parse(bytes, 'b.xlsx');
+      expect(table.header, ['종목코드', '수량']);
+      expect(table.rows, isEmpty);
     });
 
     test('시트가 모두 비면 TableParseException', () {

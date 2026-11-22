@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-import '../../../data/database/app_database.dart';
 import '../../../data/datasources/local/import_mapping_local_ds.dart';
 import '../../../data/datasources/local/table_file_parser.dart';
 import '../../../data/repositories/import_writer.dart';
@@ -34,18 +33,29 @@ class FileImportScreen extends ConsumerStatefulWidget {
 class _FileImportScreenState extends ConsumerState<FileImportScreen> {
   static final _dateFormat = DateFormat('yyyy-MM-dd');
   static final _numberFormat = NumberFormat('#,###');
+  static final _usdFormat = NumberFormat('#,##0.##');
+
+  /// 시각 성분이 없는 오늘. 거래일·투자원금일은 날짜만 의미가 있다.
+  static DateTime _today() {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day);
+  }
 
   ImportTable? _table;
   String _fileName = '';
   Map<ColumnRole, int> _mapping = {};
   AssetType? _forcedType;
-  DateTime _acquiredDate = DateTime.now();
+  DateTime _acquiredDate = _today();
+
+  /// 미리보기 재계산 요청 번호. [_loadAlreadyHeld]가 DB를 기다리는 동안
+  /// 사용자가 대상을 바꾸면, 늦게 도착한 옛 결과가 새 상태를 덮어쓴다 —
+  /// 그러면 새 포트폴리오로 가져오는데 남의 보유 목록으로 줄이 걸러진다.
+  int _recomputeToken = 0;
 
   Portfolio? _selectedPortfolio;
   bool _createNew = false;
   final _newNameCtrl = TextEditingController();
 
-  Set<String> _alreadyHeldKeys = {};
   ImportPreview? _preview;
 
   bool _busy = false;
@@ -65,6 +75,8 @@ class _FileImportScreenState extends ConsumerState<FileImportScreen> {
       withData: true,
     );
     if (result == null || result.files.isEmpty) return;
+
+    if (!mounted) return;
 
     final picked = result.files.first;
     final bytes = picked.bytes;
@@ -112,16 +124,13 @@ class _FileImportScreenState extends ConsumerState<FileImportScreen> {
 
   // ── 미리보기 재계산 ────────────────────────────────────────────────────────
 
-  Future<void> _reloadAlreadyHeld() async {
+  Future<Set<String>> _loadAlreadyHeld() async {
     final portfolio = _selectedPortfolio;
-    if (_createNew || portfolio == null) {
-      _alreadyHeldKeys = {};
-      return;
-    }
+    if (_createNew || portfolio == null) return {};
 
     final db = ref.read(appDatabaseProvider);
     final rows = await db.portfolioAssetDao.getByPortfolio(portfolio.id);
-    _alreadyHeldKeys = {
+    return {
       for (final row in rows) '${row.asset.symbol}|${row.asset.assetType}',
     };
   }
@@ -130,8 +139,11 @@ class _FileImportScreenState extends ConsumerState<FileImportScreen> {
     final table = _table;
     if (table == null) return;
 
-    await _reloadAlreadyHeld();
-    if (!mounted) return;
+    final token = ++_recomputeToken;
+    final held = await _loadAlreadyHeld();
+
+    // 기다리는 동안 사용자가 대상을 바꿨다면 이 결과는 버린다.
+    if (!mounted || token != _recomputeToken) return;
 
     setState(() {
       _preview = ColumnMatcher.buildPreview(
@@ -139,7 +151,7 @@ class _FileImportScreenState extends ConsumerState<FileImportScreen> {
         mapping: _mapping,
         forcedType: _forcedType,
         fallbackDate: _acquiredDate,
-        alreadyHeldKeys: _alreadyHeldKeys,
+        alreadyHeldKeys: held,
       );
     });
   }
@@ -161,24 +173,29 @@ class _FileImportScreenState extends ConsumerState<FileImportScreen> {
     }
 
     setState(() => _busy = true);
+
+    final ImportOutcome outcome;
     try {
-      final db = ref.read(appDatabaseProvider);
-      final rate = await ref.read(usdKrwRateProvider.future);
+      // 미리보기에 보여준 합계와 **같은 환율**을 쓴다.
+      final rate = ref.read(usdKrwRateSyncProvider);
 
-      final portfolioId = _createNew
-          ? await db.portfolioDao.insert(
-              PortfoliosCompanion.insert(name: _newNameCtrl.text.trim()),
-            )
-          : _selectedPortfolio!.id;
-
-      final count = await ref.read(importWriterProvider).write(
-            portfolioId: portfolioId,
+      outcome = await ref.read(importWriterProvider).write(
+            portfolioId: _createNew ? null : _selectedPortfolio!.id,
+            newPortfolioName: _createNew ? _newNameCtrl.text.trim() : null,
             rows: preview.rows,
             fileName: _fileName,
             usdKrwRate: rate,
           );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      _showError('가져오기에 실패했습니다. 아무것도 저장되지 않았습니다.\n$e');
+      return;
+    }
 
-      // 사용자가 고친 매핑을 파일 모양으로 기억한다.
+    // 매핑 기억은 쓰기가 끝난 뒤에, 따로 실패하게 둔다 — 여기서 던진다고
+    // 이미 저장된 가져오기를 "실패"로 알리면 사용자가 다시 누른다.
+    try {
       await ref.read(importMappingDsProvider).save(
             ImportMappingLocalDataSource.signatureOf(table.header),
             {
@@ -187,15 +204,24 @@ class _FileImportScreenState extends ConsumerState<FileImportScreen> {
                   e.key: table.header[e.value],
             },
           );
-
-      if (!mounted) return;
-      _showMessage('$count개 종목을 가져왔습니다');
-      context.pop();
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _busy = false);
-      _showError('가져오기에 실패했습니다.\n$e');
+    } catch (_) {
+      // 다음에 다시 맞추면 된다. 가져오기 자체는 성공했다.
     }
+
+    if (!mounted) return;
+    _showMessage(_outcomeMessage(outcome));
+    context.pop();
+  }
+
+  static String _outcomeMessage(ImportOutcome outcome) {
+    if (outcome.imported == 0) {
+      return '가져온 종목이 없습니다 (이미 보유 중 ${outcome.skippedAlreadyLinked}종목)';
+    }
+    if (outcome.skippedAlreadyLinked > 0) {
+      return '${outcome.imported}개 종목을 가져왔습니다 '
+          '(이미 보유 중 ${outcome.skippedAlreadyLinked}종목 제외)';
+    }
+    return '${outcome.imported}개 종목을 가져왔습니다';
   }
 
   // ── 안내 ───────────────────────────────────────────────────────────────────
@@ -526,7 +552,11 @@ class _FileImportScreenState extends ConsumerState<FileImportScreen> {
   }
 
   Widget _buildPreview(ImportPreview preview) {
-    final total = ImportWriter.totalInvestmentKrw(preview.rows, 1);
+    // 가져오기에 쓰는 것과 **같은 환율**로 계산한다. 환율 1로 계산하면
+    // 화면의 합계가 달러와 원을 더한 수가 되어, 사용자가 확인할 수 있는
+    // 수치가 아니게 된다.
+    final rate = ref.watch(usdKrwRateSyncProvider);
+    final total = ImportWriter.totalInvestmentKrw(preview.rows, rate);
     final hasUsd =
         preview.rows.any((r) => r.assetType.currency == 'USD');
 
@@ -556,13 +586,22 @@ class _FileImportScreenState extends ConsumerState<FileImportScreen> {
             children: [
               const Text('합계 투자원금'),
               Text(
-                hasUsd
-                    ? '원화 ${_numberFormat.format(total)} + 외화 환산'
-                    : '${_numberFormat.format(total)}원',
+                '${_numberFormat.format(total)}원',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ],
           ),
+          if (hasUsd)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                '달러 종목은 환율 ${_numberFormat.format(rate)}원으로 환산했습니다',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).hintColor,
+                ),
+              ),
+            ),
         ],
         for (final reason in SkipReason.values)
           if ((preview.skipCounts[reason] ?? 0) > 0)
@@ -571,36 +610,56 @@ class _FileImportScreenState extends ConsumerState<FileImportScreen> {
     );
   }
 
+  /// 종목코드와 유형, 매수일을 **반드시** 보여준다.
+  ///
+  /// 코드는 이 화면이 조용히 손보는 유일한 값이고(엑셀이 숫자로 저장해 앞의
+  /// 0이 날아간 경우 6자리로 되살린다), 날짜는 틀리면 연평균·추이가 전부
+  /// 어긋난다. 둘 다 안 보여 주면 "미리보기로 확인하고 확정"이 성립하지 않는다.
   Widget _buildPreviewRow(ImportRow row) {
     final price = row.avgPrice;
-    final unit = row.assetType.currency == 'USD' ? r'$' : '원';
+    final isUsd = row.assetType.currency == 'USD';
+    final hint = Theme.of(context).hintColor;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
-            child: Text(
-              row.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  row.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  '${row.symbol} · ${isUsd ? '미국' : '한국'} · '
+                  '${_dateFormat.format(row.buyDate)}',
+                  style: TextStyle(fontSize: 11, color: hint),
+                ),
+              ],
             ),
           ),
+          const SizedBox(width: 8),
           Text(
             _trimQuantity(row.quantity),
-            style: TextStyle(color: Theme.of(context).hintColor),
+            style: TextStyle(color: hint),
           ),
           const SizedBox(width: 12),
           SizedBox(
-            width: 120,
+            width: 128,
             child: Text(
               price == null
-                  ? '평균단가 없음'
-                  : '${_numberFormat.format(price)}$unit',
+                  ? '평균단가 없음 — 종목만 등록'
+                  : isUsd
+                      ? '\$${_usdFormat.format(price)}'
+                      : '${_numberFormat.format(price)}원',
               textAlign: TextAlign.right,
               style: TextStyle(
-                color: price == null ? Theme.of(context).hintColor : null,
-                fontSize: price == null ? 12 : null,
+                color: price == null ? Colors.orange : null,
+                fontSize: price == null ? 11 : null,
               ),
             ),
           ),

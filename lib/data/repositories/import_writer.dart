@@ -3,6 +3,30 @@ import 'package:drift/drift.dart';
 import '../../domain/entities/import_table.dart';
 import '../database/app_database.dart';
 
+/// 가져오기 결과.
+class ImportOutcome {
+  /// 실제로 등록된 종목 수.
+  final int imported;
+
+  /// 이미 그 포트폴리오에 있어서 건너뛴 종목 수.
+  final int skippedAlreadyLinked;
+
+  /// 쓴 포트폴리오. 아무것도 쓰지 않았으면 null.
+  final int? portfolioId;
+
+  const ImportOutcome({
+    required this.imported,
+    required this.skippedAlreadyLinked,
+    required this.portfolioId,
+  });
+
+  static const empty = ImportOutcome(
+    imported: 0,
+    skippedAlreadyLinked: 0,
+    portfolioId: null,
+  );
+}
+
 /// 확정된 [ImportRow] 목록을 DB에 쓴다. 파일 형식도 화면도 모른다 —
 /// 거래 내역 가져오기(다음 확장)에서 그대로 재사용한다.
 class ImportWriter {
@@ -14,20 +38,35 @@ class ImportWriter {
   /// 남지 않아야 하고, 종목마다 쓰기를 날리면 조인된 drift `.watch()` 스트림이
   /// 매번 다시 발화해 화면이 버벅인다(백업 복원에서 겪은 문제).
   ///
-  /// 돌려주는 값은 **실제로 등록된 종목 수**다. 이미 그 포트폴리오에 있던
-  /// 종목은 건너뛰므로 [rows]의 길이와 다를 수 있다.
-  Future<int> write({
-    required int portfolioId,
+  /// [portfolioId]와 [newPortfolioName] 중 **하나만** 준다. 새 포트폴리오도
+  /// 같은 트랜잭션 안에서 만든다 — 밖에서 만들면 쓰기가 실패했을 때 빈
+  /// 포트폴리오가 남고, 사용자가 다시 누르면 같은 이름이 또 생긴다.
+  Future<ImportOutcome> write({
+    int? portfolioId,
+    String? newPortfolioName,
     required List<ImportRow> rows,
     required String fileName,
     required double usdKrwRate,
   }) async {
-    if (rows.isEmpty) return 0;
+    assert(
+      (portfolioId == null) != (newPortfolioName == null),
+      'portfolioId와 newPortfolioName 중 하나만 주세요',
+    );
+
+    if (rows.isEmpty) return ImportOutcome.empty;
 
     final memo = '파일 가져오기: $fileName';
     final written = <ImportRow>[];
+    var skippedAlreadyLinked = 0;
+    int? targetPortfolioId;
 
     await _db.transaction(() async {
+      targetPortfolioId = portfolioId ??
+          await _db.portfolioDao.insert(
+            PortfoliosCompanion.insert(name: newPortfolioName!),
+          );
+      final target = targetPortfolioId!;
+
       for (final row in rows) {
         final type = row.assetType;
 
@@ -53,14 +92,16 @@ class ImportWriter {
         // 안 된다 — {portfolioId, assetId}에 UNIQUE가 걸려 있다.
         final alreadyLinked = await (_db.select(_db.portfolioAssets)
               ..where((pa) =>
-                  pa.portfolioId.equals(portfolioId) &
-                  pa.assetId.equals(assetId)))
+                  pa.portfolioId.equals(target) & pa.assetId.equals(assetId)))
             .getSingleOrNull();
-        if (alreadyLinked != null) continue;
+        if (alreadyLinked != null) {
+          skippedAlreadyLinked++;
+          continue;
+        }
 
         final portfolioAssetId = await _db.portfolioAssetDao.insert(
           PortfolioAssetsCompanion.insert(
-            portfolioId: portfolioId,
+            portfolioId: target,
             assetId: assetId,
             targetWeight: 0,
           ),
@@ -91,7 +132,7 @@ class ImportWriter {
       if (total > 0) {
         await _db.investmentDao.insert(
           InvestmentsCompanion.insert(
-            portfolioId: portfolioId,
+            portfolioId: target,
             amount: total,
             investmentDate: earliestDate(written),
             memo: Value(memo),
@@ -100,7 +141,11 @@ class ImportWriter {
       }
     });
 
-    return written.length;
+    return ImportOutcome(
+      imported: written.length,
+      skippedAlreadyLinked: skippedAlreadyLinked,
+      portfolioId: targetPortfolioId,
+    );
   }
 
   /// 가져온 줄들의 `수량 × 평균단가` 합계, **원화**. 미국 종목은 환산한다.
