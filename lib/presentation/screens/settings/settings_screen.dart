@@ -7,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../../services/backup_service.dart';
 import '../../../services/firebase_service.dart';
+import '../../../services/share_code.dart';
+import '../../widgets/login_required_dialog.dart';
 import '../../providers/auth_providers.dart';
 import '../../providers/database_providers.dart';
 import '../../providers/price_providers.dart';
@@ -50,8 +52,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   // ── 내보내기 ──────────────────────────────────────────────────────────────
 
-  void _showShareCodeDialog(BuildContext context) {
+  Future<void> _showShareCodeDialog(BuildContext context) async {
+    // 공유 포트폴리오는 로그인한 사용자만 볼 수 있다. 코드를 입력하게 해놓고
+    // 다음 화면에서 막으면 사용자는 코드가 틀린 줄 안다.
+    if (FirebaseService.instance.currentUser == null) {
+      await showLoginRequiredDialog(context,
+          what: '공유받은 포트폴리오를 보려면');
+      return;
+    }
+
     final ctrl = TextEditingController();
+    if (!context.mounted) return;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -73,10 +84,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           FilledButton(
             onPressed: () {
-              final code = ctrl.text.trim().toUpperCase();
-              if (code.length != 6) return;
+              // 길이만 보던 검사를 형식 검사로 바꾼다 — 'ABCDE0'처럼
+              // 쓰이지 않는 문자가 섞인 코드는 조회해도 없다.
+              if (!ShareCode.isValid(ctrl.text)) return;
               Navigator.pop(ctx);
-              context.push('/shared/$code');
+              context.push('/shared/${ShareCode.normalize(ctrl.text)}');
             },
             child: const Text('열기'),
           ),

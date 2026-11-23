@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import 'share_code.dart';
+
 export 'package:firebase_auth/firebase_auth.dart' show User;
 
 enum CloudSyncResult { notLoggedIn, uploaded, downloaded, noData, error }
@@ -127,39 +129,62 @@ class FirebaseService {
 
   // ── Portfolio sharing ────────────────────────────────────────────────────────
 
-  /// Saves portfolio data to public Firestore and returns a 6-char share code.
+  /// 공유 문서를 만들고 코드를 돌려준다. **로그인이 필요하다.**
+  ///
+  /// 코드가 이미 있으면 Firestore 규칙(`allow update: if false`)이
+  /// permission-denied로 막는다 — 조용한 덮어쓰기 대신 재시도한다.
+  /// 32^6 ≈ 10억이고 암호학적 난수를 쓰므로 실제로 걸릴 일은 거의 없다.
   Future<String> sharePortfolio(Map<String, dynamic> data) async {
-    final code = _generateCode();
-    await _db.collection('portfolio_shares').doc(code).set({
-      ...data,
-      'sharedAt': Timestamp.now(),
-      'sharedBy': currentUser?.email ?? 'anonymous',
-    });
-    return code;
+    final user = currentUser;
+    if (user == null) throw ShareAuthRequiredException();
+
+    const maxAttempts = 5;
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      final code = ShareCode.generate();
+      try {
+        await _db.collection('portfolio_shares').doc(code).set({
+          ...data,
+          'sharedAt': Timestamp.now(),
+          'sharedBy': user.email ?? user.uid,
+        });
+        return code;
+      } on FirebaseException catch (e) {
+        // 로그인은 위에서 확인했으므로 코드 충돌로 본다. 마지막 시도까지
+        // 막히면 그대로 올려 사용자에게 알린다.
+        if (e.code == 'permission-denied' && attempt < maxAttempts) continue;
+        rethrow;
+      }
+    }
+    throw Exception('공유 코드를 만들지 못했습니다. 다시 시도해주세요.');
   }
 
-  /// Fetches shared portfolio data by code. Returns null if not found.
+  /// 코드로 공유 포트폴리오를 가져온다. **로그인이 필요하다.**
+  ///
+  /// 코드가 없으면 null. 권한이 없으면 [ShareAuthRequiredException],
+  /// 그 외 오류는 그대로 올린다 — 전에는 모든 오류를 null로 삼켜
+  /// 네트워크 장애가 '코드 없음'으로 보였다.
   Future<Map<String, dynamic>?> getSharedPortfolio(String code) async {
+    if (currentUser == null) throw ShareAuthRequiredException();
     try {
       final doc = await _db
           .collection('portfolio_shares')
-          .doc(code.toUpperCase())
+          .doc(ShareCode.normalize(code))
           .get();
       return doc.exists ? doc.data() : null;
-    } catch (_) {
-      return null;
+    } on FirebaseException catch (e) {
+      if (e.code == 'permission-denied') throw ShareAuthRequiredException();
+      rethrow;
     }
   }
+}
 
-  String _generateCode() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    final rand = DateTime.now().millisecondsSinceEpoch;
-    var seed = rand;
-    final buf = StringBuffer();
-    for (int i = 0; i < 6; i++) {
-      seed = (seed * 1664525 + 1013904223) & 0xFFFFFFFF;
-      buf.write(chars[seed % chars.length]);
-    }
-    return buf.toString();
-  }
+/// 공유를 만들거나 보려면 로그인이 필요하다는 뜻.
+///
+/// '코드 없음'과 구분해야 화면에서 로그인 안내를 띄울 수 있다.
+class ShareAuthRequiredException implements Exception {
+  final String message;
+  ShareAuthRequiredException([this.message = '로그인이 필요합니다']);
+
+  @override
+  String toString() => message;
 }

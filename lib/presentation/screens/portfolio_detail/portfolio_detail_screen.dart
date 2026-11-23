@@ -25,6 +25,7 @@ import '../../providers/portfolio_providers.dart';
 import '../../providers/price_providers.dart';
 import '../../../domain/services/financial_calculator.dart';
 import '../../../services/firebase_service.dart';
+import '../../widgets/login_required_dialog.dart';
 
 class PortfolioDetailScreen extends ConsumerWidget {
   final int portfolioId;
@@ -416,6 +417,13 @@ class _PortfolioDetailViewState extends ConsumerState<_PortfolioDetailView> {
 
   Future<void> _sharePortfolio(BuildContext context,
       PortfolioMetrics? metrics, List<PortfolioAsset> assets) async {
+    // 공유는 로그인한 사용자만 만들 수 있다(Firestore 규칙과 같은 조건).
+    // 여기서 먼저 막지 않으면 데이터를 다 만든 뒤 permission-denied가 난다.
+    if (FirebaseService.instance.currentUser == null) {
+      await showLoginRequiredDialog(context, what: '포트폴리오를 공유하려면');
+      return;
+    }
+
     if (metrics == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('포트폴리오 데이터를 불러오는 중입니다. 잠시 후 다시 시도해주세요.')),
@@ -504,6 +512,12 @@ class _PortfolioDetailViewState extends ConsumerState<_PortfolioDetailView> {
           ],
         ),
       );
+    } on ShareAuthRequiredException {
+      // 데이터를 만드는 사이에 로그인이 만료된 경우.
+      loadingSnack.close();
+      if (context.mounted) {
+        await showLoginRequiredDialog(context, what: '포트폴리오를 공유하려면');
+      }
     } catch (e) {
       loadingSnack.close();
       if (context.mounted) {

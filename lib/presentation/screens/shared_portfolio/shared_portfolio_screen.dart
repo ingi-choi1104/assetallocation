@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/constants/app_colors.dart';
@@ -17,6 +18,7 @@ class _SharedPortfolioScreenState extends State<SharedPortfolioScreen> {
   Map<String, dynamic>? _data;
   bool _loading = true;
   String? _error;
+  bool _needsLogin = false;
 
   static final _comma = NumberFormat('#,##0', 'ko_KR');
 
@@ -27,13 +29,32 @@ class _SharedPortfolioScreenState extends State<SharedPortfolioScreen> {
   }
 
   Future<void> _load() async {
-    final data = await FirebaseService.instance
-        .getSharedPortfolio(widget.code);
-    if (mounted) {
+    try {
+      final data =
+          await FirebaseService.instance.getSharedPortfolio(widget.code);
+      if (!mounted) return;
       setState(() {
         _loading = false;
         _data = data;
         _error = data == null ? '공유 코드를 찾을 수 없습니다.' : null;
+        _needsLogin = false;
+      });
+    } on ShareAuthRequiredException {
+      // 공유 포트폴리오는 로그인한 사용자만 볼 수 있다. '코드 없음'과 구분해
+      // 로그인 안내를 띄운다 — 전에는 모든 오류가 '코드를 찾을 수 없습니다'로
+      // 보여서 사용자가 코드를 의심했다.
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _needsLogin = true;
+        _error = '공유받은 포트폴리오를 보려면 로그인이 필요합니다.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _needsLogin = false;
+        _error = '불러오지 못했습니다. 연결을 확인해주세요.';
       });
     }
   }
@@ -64,15 +85,41 @@ class _SharedPortfolioScreenState extends State<SharedPortfolioScreen> {
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.link_off,
-                          size: 48, color: Colors.grey),
-                      const SizedBox(height: 12),
-                      Text(_error!,
-                          style: const TextStyle(color: Colors.grey)),
-                    ],
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                            _needsLogin
+                                ? Icons.lock_outline
+                                : Icons.link_off,
+                            size: 48,
+                            color: Colors.grey),
+                        const SizedBox(height: 12),
+                        Text(_error!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Colors.grey)),
+                        if (_needsLogin) ...[
+                          const SizedBox(height: 20),
+                          FilledButton(
+                            onPressed: () => context.push('/settings'),
+                            child: const Text('설정에서 로그인'),
+                          ),
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: () {
+                              setState(() {
+                                _loading = true;
+                                _error = null;
+                              });
+                              _load();
+                            },
+                            child: const Text('다시 시도'),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 )
               : _buildContent(),
