@@ -127,6 +127,22 @@ class AssetRepositoryImpl implements AssetRepository {
   }
 
   @override
+  Future<void> updateTransaction(Transaction transaction) async {
+    await _db.transactionDao.updateById(
+      transaction.id,
+      TransactionsCompanion(
+        type: Value(transaction.type.value),
+        quantity: Value(transaction.quantity),
+        price: Value(transaction.price),
+        exchangeRate: Value(transaction.exchangeRate),
+        fee: Value(transaction.fee),
+        transactionDate: Value(transaction.transactionDate),
+        memo: Value(transaction.memo),
+      ),
+    );
+  }
+
+  @override
   Future<void> deleteTransaction(int transactionId) async {
     await _db.transactionDao.deleteById(transactionId);
   }

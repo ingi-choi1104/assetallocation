@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/utils/thousands_input_formatter.dart';
 import '../../../domain/entities/transaction.dart';
 import '../../../domain/enums/asset_type.dart';
 import '../../../domain/enums/transaction_type.dart';
@@ -103,19 +104,23 @@ class _TransactionFormScreenState
               decoration: InputDecoration(
                 labelText: isCash ? '금액 *' : '수량 *',
                 hintText: isCash
-                    ? '예: 1000000'
+                    ? '예: 1,000,000'
                     : isGold
                         ? '예: 3.75'
                         : '예: 10.5',
-                suffixText: isGold ? 'g' : null,
+                suffixText: isGold ? 'g' : (isCash ? '원' : null),
               ),
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
+              // 입력하는 동안 세 자릿수마다 쉼표를 넣는다 (소수점은 그대로 허용).
+              inputFormatters: [
+                ThousandsInputFormatter(decimalRange: isCash ? 0 : 8),
+              ],
               validator: (v) {
                 if (v == null || v.isEmpty) {
                   return isCash ? '금액을 입력하세요' : '수량을 입력하세요';
                 }
-                final n = double.tryParse(v);
+                final n = ThousandsInputFormatter.parse(v);
                 if (n == null || n <= 0) {
                   return isCash ? '유효한 금액을 입력하세요' : '유효한 수량을 입력하세요';
                 }
@@ -155,7 +160,7 @@ class _TransactionFormScreenState
         id: 0,
         portfolioAssetId: widget.portfolioAssetId,
         type: _type,
-        quantity: double.parse(_quantityCtrl.text),
+        quantity: ThousandsInputFormatter.parse(_quantityCtrl.text)!,
         price: 0,
         exchangeRate: 1.0,
         fee: 0,

@@ -44,3 +44,9 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Firebase 배포 캐시
+.firebase/
+
+# 로컬 산출물·보고서 (앱 코드 아님)
+reports/

@@ -209,8 +209,7 @@ class _SnapshotCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final dateStr =
         DateFormat('yyyy년 M월 d일 HH:mm').format(snapshot.takenAt);
-    final returnColor =
-        snapshot.returnRate >= 0 ? AppColors.positive : AppColors.negative;
+    final returnColor = AppColors.forChange(snapshot.returnRate);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
@@ -265,9 +264,8 @@ class _SnapshotCard extends ConsumerWidget {
                         style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: snapshot.annualizedReturnRate >= 0
-                                ? AppColors.positive
-                                : AppColors.negative),
+                            color: AppColors.forChange(
+                                snapshot.annualizedReturnRate)),
                       ),
                     ],
                   ],

@@ -198,13 +198,18 @@ class _BundleContentState extends ConsumerState<_BundleContent> {
                     );
                   },
                 ),
-                SliverToBoxAdapter(
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 8),
-                      const Center(child: BannerAdWidget()),
-                      const SizedBox(height: 16),
-                    ],
+                // edge-to-edge: 이 화면은 하단 내비게이션 바가 없어서
+                // 마지막 요소가 시스템 제스처 바에 가린다.
+                const SliverSafeArea(
+                  top: false,
+                  sliver: SliverToBoxAdapter(
+                    child: Column(
+                      children: [
+                        SizedBox(height: 8),
+                        Center(child: BannerAdWidget()),
+                        SizedBox(height: 16),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -320,9 +325,7 @@ class _BundleMemberCard extends ConsumerWidget {
                         return Text(valueStr,
                             style: const TextStyle(fontSize: 12));
                       }
-                      final color = m.returnRate >= 0
-                          ? AppColors.positive
-                          : AppColors.negative;
+                      final color = AppColors.forChange(m.returnRate);
                       return Text(
                         '$valueStr  ${CurrencyFormatter.formatSignedPercent(m.returnRate * 100)}',
                         style: TextStyle(
@@ -400,11 +403,8 @@ class _BundleSummaryCard extends ConsumerWidget {
           return const SizedBox.shrink();
         }
         final hasInvestments = m.totalInvested > 0;
-        final returnColor =
-            m.returnRate >= 0 ? AppColors.positive : AppColors.negative;
-        final annReturnColor = m.annualizedReturnRate >= 0
-            ? AppColors.positive
-            : AppColors.negative;
+        final returnColor = AppColors.forChange(m.returnRate);
+        final annReturnColor = AppColors.forChange(m.annualizedReturnRate);
         final valueDisplay = showKrw
             ? CurrencyFormatter.formatKrw(m.totalValue)
             : CurrencyFormatter.formatUsd(m.totalValue / rate);
@@ -508,9 +508,7 @@ class _BundleDailyChangeText extends StatelessWidget {
   Widget build(BuildContext context) {
     final pct = change.percentChange;
     final amt = change.amountChange;
-    final color = pct > 0
-        ? AppColors.negative
-        : (pct < 0 ? const Color(0xFF1565C0) : Colors.grey);
+    final color = AppColors.forChange(pct);
     final sign = pct >= 0 ? '+' : '';
     final amtStr = showKrw
         ? CurrencyFormatter.formatKrw(amt.abs())

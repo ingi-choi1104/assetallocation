@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 이하 자동 백업 규칙.
+     Firebase 인증 토큰은 백업에서 제외한다. 오래된 인증 상태가 복원되면
+     서버의 토큰과 어긋나 갑자기 로그아웃되는 증상이 생긴다.
+     포트폴리오 DB와 앱 설정은 그대로 백업된다. -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="com.google.android.gms.appid.xml" />
+    <exclude domain="sharedpref" path="com.google.android.gms.measurement.prefs.xml" />
+    <exclude domain="sharedpref" path="com.google.firebase.auth.api.Store.xml" />
+</full-backup-content>

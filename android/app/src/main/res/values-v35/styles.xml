@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 15(API 35)+ 전용.
+         이 버전부터 시스템이 edge-to-edge를 강제하고 시스템 바를 알아서
+         투명하게 처리하므로, statusBarColor / navigationBarColor /
+         navigationBarDividerColor 를 지정하지 않는다. (해당 속성은 API 35에서
+         지원 중단됐고 적용되지도 않는다.)
+         API 34 이하는 values/styles.xml 이 그대로 쓰인다. -->
+    <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">?android:colorBackground</item>
+    </style>
+</resources>

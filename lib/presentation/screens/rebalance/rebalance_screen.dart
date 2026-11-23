@@ -187,7 +187,7 @@ class _GapTile extends StatelessWidget {
                   Icon(
                     isBuy ? Icons.arrow_upward : Icons.arrow_downward,
                     size: 18,
-                    color: isBuy ? AppColors.positive : AppColors.negative,
+                    color: isBuy ? AppColors.up : AppColors.down,
                   ),
                   const SizedBox(width: 4),
                   Text(
@@ -195,7 +195,7 @@ class _GapTile extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
-                      color: isBuy ? AppColors.positive : AppColors.negative,
+                      color: isBuy ? AppColors.up : AppColors.down,
                     ),
                   ),
                   const Spacer(),

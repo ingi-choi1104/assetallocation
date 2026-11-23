@@ -1,0 +1,16 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 클라우드 동기화: 본인 데이터만 읽기/쓰기
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // 포트폴리오 공유: 누구나 읽기, 누구나 쓰기 (익명 공유 허용)
+    match /portfolio_shares/{code} {
+      allow read: if true;
+      allow write: if true;
+    }
+  }
+}

@@ -182,8 +182,7 @@ class _SummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasInv = snapshot.totalInvested > 0;
-    final returnColor =
-        snapshot.returnRate >= 0 ? AppColors.positive : AppColors.negative;
+    final returnColor = AppColors.forChange(snapshot.returnRate);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -221,9 +220,8 @@ class _SummaryCard extends StatelessWidget {
                       style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: snapshot.annualizedReturnRate >= 0
-                              ? AppColors.positive
-                              : AppColors.negative),
+                          color: AppColors.forChange(
+                              snapshot.annualizedReturnRate)),
                     ),
                   ],
                 ],
@@ -394,8 +392,7 @@ class _PortfolioCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasInv = entry.invested > 0;
-    final returnColor =
-        entry.returnRate >= 0 ? AppColors.positive : AppColors.negative;
+    final returnColor = AppColors.forChange(entry.returnRate);
     final portfolioShare =
         totalValue == 0 ? 0.0 : entry.valueKrw / totalValue * 100;
 
@@ -455,9 +452,8 @@ class _PortfolioCard extends StatelessWidget {
                                   '연 ${CurrencyFormatter.formatSignedPercent(entry.annualizedReturnRate * 100)}',
                                   style: TextStyle(
                                       fontSize: 12,
-                                      color: entry.annualizedReturnRate >= 0
-                                          ? AppColors.positive
-                                          : AppColors.negative,
+                                      color: AppColors.forChange(
+                                          entry.annualizedReturnRate),
                                       fontWeight: FontWeight.w600),
                                 ),
                               ],

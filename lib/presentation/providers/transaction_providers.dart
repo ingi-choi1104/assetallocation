@@ -19,6 +19,12 @@ class TransactionActions {
     return _ref.read(assetRepositoryProvider).addTransaction(transaction);
   }
 
+  Future<void> updateTransaction(Transaction transaction) {
+    return _ref
+        .read(assetRepositoryProvider)
+        .updateTransaction(transaction);
+  }
+
   Future<void> deleteTransaction(int transactionId) {
     return _ref
         .read(assetRepositoryProvider)

@@ -1,3 +1,4 @@
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/router/app_router.dart';
@@ -17,6 +18,7 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _initDeepLinks();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       // 0. 금 자산을 국내 금 현물(원/g) 기준으로 마이그레이션 (통화 USD→KRW)
       await ref.read(appDatabaseProvider).assetDao.migrateGoldCurrencyToKrw();
@@ -24,6 +26,17 @@ class _AppState extends ConsumerState<App> with WidgetsBindingObserver {
       await ref.read(priceRepositoryProvider).initializePriceCache();
       // 2. 백그라운드에서 실시간 가격 가져오기 시작 (5분 주기 자동 갱신)
       ref.read(backgroundPriceRefreshProvider.notifier).start();
+    });
+  }
+
+  void _initDeepLinks() {
+    AppLinks().uriLinkStream.listen((uri) {
+      if (uri.scheme == 'assetallocation' && uri.host == 'shared') {
+        final code = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : '';
+        if (code.isNotEmpty) {
+          ref.read(routerProvider).go('/shared/$code');
+        }
+      }
     });
   }
 

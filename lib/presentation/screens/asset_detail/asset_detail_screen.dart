@@ -12,6 +12,7 @@ import '../../../domain/services/financial_calculator.dart';
 import '../../providers/asset_providers.dart';
 import '../../providers/price_providers.dart';
 import '../../providers/transaction_providers.dart';
+import 'transaction_edit_dialog.dart';
 
 class AssetDetailScreen extends ConsumerWidget {
   final int portfolioAssetId;
@@ -210,21 +211,8 @@ class _AssetHeader extends ConsumerWidget {
     Color changeColor = Colors.grey;
     String changeText = '';
     if (changePercent != null) {
-      final isKrStyle = asset?.assetType == AssetType.krStock;
-      // 한국 증시 관행: 상승=빨간색, 하락=파란색 / 해외: 상승=초록색, 하락=빨간색
-      if (isKrStyle) {
-        changeColor = changePercent > 0
-            ? AppColors.negative
-            : changePercent < 0
-                ? const Color(0xFF1565C0)
-                : Colors.grey;
-      } else {
-        changeColor = changePercent > 0
-            ? AppColors.positive
-            : changePercent < 0
-                ? AppColors.negative
-                : Colors.grey;
-      }
+      // 한국 증시 관례로 통일: 상승=빨간색, 하락=파란색. 해외 종목도 같다.
+      changeColor = AppColors.forChange(changePercent);
       final sign = changePercent >= 0 ? '+' : '';
       changeText = '$sign${changePercent.toStringAsFixed(2)}%';
     }
@@ -407,11 +395,11 @@ class _TransactionTile extends ConsumerWidget {
     return ListTile(
       leading: CircleAvatar(
         backgroundColor: isBuy
-            ? AppColors.positive.withValues(alpha: 0.1)
-            : AppColors.negative.withValues(alpha: 0.1),
+            ? AppColors.up.withValues(alpha: 0.1)
+            : AppColors.down.withValues(alpha: 0.1),
         child: Icon(
           isBuy ? Icons.trending_up : Icons.trending_down,
-          color: isBuy ? AppColors.positive : AppColors.negative,
+          color: isBuy ? AppColors.up : AppColors.down,
         ),
       ),
       title: Row(
@@ -422,6 +410,12 @@ class _TransactionTile extends ConsumerWidget {
         ],
       ),
       subtitle: Text(dateStr, style: const TextStyle(fontSize: 12)),
+      // 탭하면 매수/매도·수량·날짜를 고칠 수 있는 팝업이 뜬다.
+      onTap: () => showTransactionEditDialog(
+        context,
+        transaction: tx,
+        assetType: assetType,
+      ),
       trailing: IconButton(
         icon: Icon(Icons.delete_outline,
             color: Colors.red.withValues(alpha: 0.7), size: 20),

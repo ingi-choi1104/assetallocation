@@ -270,6 +270,8 @@ class _ResultView extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        _DisclaimerCard(result: result),
+        const SizedBox(height: 12),
         _RegimeCard(result: result),
         const SizedBox(height: 12),
         _AllocationCard(result: result),
@@ -279,6 +281,95 @@ class _ResultView extends StatelessWidget {
         _ExplanationCard(result: result),
         const SizedBox(height: 24),
       ],
+    );
+  }
+}
+
+// ── Disclaimer Card ───────────────────────────────────────────────────────────
+
+class _DisclaimerCard extends StatelessWidget {
+  final StrategyResult result;
+
+  const _DisclaimerCard({required this.result});
+
+  String _fmt(DateTime d) =>
+      '${d.year}.${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}';
+
+  @override
+  Widget build(BuildContext context) {
+    final calcDate = _fmt(result.calculationDate);
+    // Monthly prices use end-of-month closes for months completed before calculationDate
+    final dataNote = '계산 기준일 이전 완성된 월의 종가 (Yahoo Finance 월간 데이터)';
+
+    return Card(
+      color: Colors.orange.withValues(alpha: 0.06),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.orange.withValues(alpha: 0.3)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.info_outline, size: 16, color: Colors.orange),
+                const SizedBox(width: 6),
+                Text(
+                  '계산 정보 및 유의사항',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.orange.shade800,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            _InfoRow(label: '계산 기준일', value: calcDate),
+            _InfoRow(label: '가격 데이터', value: dataNote),
+            _InfoRow(label: '적용 전략', value: result.strategyType.displayName),
+            const SizedBox(height: 8),
+            const Divider(height: 1),
+            const SizedBox(height: 8),
+            const Text(
+              '이 결과는 해당 동적 자산배분 전략의 규칙에 따라 계산된 수치입니다. '
+              '투자 추천이나 금융 자문이 아니며, 투자 결정은 본인의 판단과 책임하에 이루어져야 합니다.',
+              style: TextStyle(fontSize: 11, height: 1.6, color: Colors.black54),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _InfoRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(label,
+                style: const TextStyle(fontSize: 11, color: Colors.grey)),
+          ),
+          Expanded(
+            child: Text(value,
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -325,7 +416,7 @@ class _RegimeCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '현재 시장 판단',
+                    '전략 신호 판단',
                     style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                   ),
                   Text(
@@ -377,7 +468,7 @@ class _AllocationCardState extends State<_AllocationCard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '권장 자산 배분',
+              '전략에 따른 자산 배분',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -597,7 +688,7 @@ class _MomentumSignalTable extends StatelessWidget {
                         s.momentumScore!.toStringAsFixed(2),
                         style: TextStyle(
                           fontSize: 12,
-                          color: s.momentumScore! > 0 ? AppColors.positive : AppColors.negative,
+                          color: AppColors.forChange(s.momentumScore),
                           fontWeight: FontWeight.w600,
                         ),
                       )
@@ -670,14 +761,14 @@ class _GTAASignalTable extends StatelessWidget {
                           Icon(
                             s.isAboveSma! ? Icons.arrow_upward : Icons.arrow_downward,
                             size: 12,
-                            color: s.isAboveSma! ? AppColors.positive : AppColors.negative,
+                            color: s.isAboveSma! ? AppColors.up : AppColors.down,
                           ),
                           const SizedBox(width: 2),
                           Text(
                             s.isAboveSma! ? '이평 위' : '이평 아래',
                             style: TextStyle(
                               fontSize: 11,
-                              color: s.isAboveSma! ? AppColors.positive : AppColors.negative,
+                              color: s.isAboveSma! ? AppColors.up : AppColors.down,
                             ),
                           ),
                         ],
@@ -943,7 +1034,7 @@ class _ReturnText extends StatelessWidget {
   Widget build(BuildContext context) {
     if (value == null) return const Text('-', style: TextStyle(fontSize: 12, color: Colors.grey));
     final pct = (value! * 100).toStringAsFixed(1);
-    final color = value! > 0 ? AppColors.positive : (value! < 0 ? AppColors.negative : Colors.grey);
+    final color = AppColors.forChange(value);
     final sign = value! > 0 ? '+' : '';
     return Text(
       '$sign$pct%',

@@ -23,5 +23,6 @@ abstract interface class AssetRepository {
   Stream<List<Transaction>> watchTransactions(int portfolioAssetId);
   Future<List<Transaction>> getTransactions(int portfolioAssetId);
   Future<int> addTransaction(Transaction transaction);
+  Future<void> updateTransaction(Transaction transaction);
   Future<void> deleteTransaction(int transactionId);
 }

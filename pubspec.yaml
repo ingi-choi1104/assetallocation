@@ -1,7 +1,7 @@
 name: assetallocation
 description: "자산배분 헬퍼 - 포트폴리오 관리 앱"
 publish_to: 'none'
-version: 1.0.16+17
+version: 1.0.17+18
 
 environment:
   sdk: '>=3.5.0 <4.0.0'

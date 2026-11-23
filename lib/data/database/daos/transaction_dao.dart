@@ -30,6 +30,11 @@ class TransactionDao extends DatabaseAccessor<AppDatabase>
   Future<int> insert(TransactionsCompanion companion) =>
       into(transactions).insert(companion);
 
+  Future<bool> updateById(int id, TransactionsCompanion companion) =>
+      (update(transactions)..where((t) => t.id.equals(id)))
+          .write(companion)
+          .then((rows) => rows > 0);
+
   Future<int> deleteById(int id) =>
       (delete(transactions)..where((t) => t.id.equals(id))).go();
 }

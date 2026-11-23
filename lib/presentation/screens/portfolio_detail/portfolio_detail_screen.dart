@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/widgets/banner_ad_widget.dart';
@@ -23,6 +24,7 @@ import '../../providers/metrics_providers.dart';
 import '../../providers/portfolio_providers.dart';
 import '../../providers/price_providers.dart';
 import '../../../domain/services/financial_calculator.dart';
+import '../../../services/firebase_service.dart';
 
 class PortfolioDetailScreen extends ConsumerWidget {
   final int portfolioId;
@@ -96,6 +98,12 @@ class _PortfolioDetailViewState extends ConsumerState<_PortfolioDetailView> {
       appBar: AppBar(
         title: Text(_portfolio.name),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.share_outlined),
+            tooltip: '포트폴리오 공유',
+            onPressed: () => _sharePortfolio(
+                context, metricsAsync.valueOrNull, assets),
+          ),
           IconButton(
             icon: const Icon(Icons.edit),
             onPressed: () =>
@@ -404,6 +412,106 @@ class _PortfolioDetailViewState extends ConsumerState<_PortfolioDetailView> {
         ],
       ),
     );
+  }
+
+  Future<void> _sharePortfolio(BuildContext context,
+      PortfolioMetrics? metrics, List<PortfolioAsset> assets) async {
+    if (metrics == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('포트폴리오 데이터를 불러오는 중입니다. 잠시 후 다시 시도해주세요.')),
+      );
+      return;
+    }
+
+    // weightsAsync에서 계산된 데이터를 사용
+    final weightsValue =
+        ref.read(portfolioWeightsProvider(_portfolio.id)).valueOrNull;
+    final gaps = weightsValue ?? [];
+
+    final assetData = gaps.map((g) => {
+      'name': g.assetName,
+      'symbol': g.symbol,
+      'weight': g.currentWeight * 100,
+      'value': g.currentValue,
+      'quantity': g.holdings,
+    }).toList();
+
+    final shareData = {
+      'portfolioName': _portfolio.name,
+      'totalValue': metrics.totalValue,
+      'returnRate': metrics.returnRate,
+      'currency': 'KRW',
+      'assets': assetData,
+    };
+
+    // 로딩 표시
+    final loadingSnack = ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(
+            content: Text('공유 링크 생성 중...'),
+            duration: Duration(seconds: 30)));
+
+    try {
+      final code = await FirebaseService.instance.sharePortfolio(shareData);
+      loadingSnack.close();
+      if (!context.mounted) return;
+
+      final shareUrl =
+          'https://dobby-assetallocation.web.app/share/$code';
+
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('포트폴리오 공유'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('아래 링크를 카카오톡 등으로 전달하세요.\n상대방이 링크를 클릭하면 바로 열립니다.',
+                  style: TextStyle(fontSize: 13)),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  shareUrl,
+                  style: const TextStyle(fontSize: 12, color: Colors.blue),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text('* 앱이 없으면 Play 스토어로 이동합니다.\n* 수정은 불가능하며 조회만 가능합니다.',
+                  style: TextStyle(fontSize: 11, color: Colors.grey)),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('닫기'),
+            ),
+            FilledButton.icon(
+              icon: const Icon(Icons.share, size: 16),
+              label: const Text('공유하기'),
+              onPressed: () {
+                Share.share(
+                  '자산배분 헬퍼에서 ${_portfolio.name} 포트폴리오를 공유했습니다.\n'
+                  '$shareUrl',
+                );
+              },
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      loadingSnack.close();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('공유 실패: $e')),
+        );
+      }
+    }
   }
 
   Future<bool?> _confirmDelete(BuildContext context) =>
@@ -738,12 +846,8 @@ class _MetricsCard extends ConsumerWidget {
     final dailyChange = ref.watch(portfolioDailyChangeProvider(portfolioId));
     final hasInvestments = metrics.totalInvested > 0;
 
-    final returnColor = metrics.returnRate >= 0
-        ? AppColors.positive
-        : AppColors.negative;
-    final annReturnColor = metrics.annualizedReturnRate >= 0
-        ? AppColors.positive
-        : AppColors.negative;
+    final returnColor = AppColors.forChange(metrics.returnRate);
+    final annReturnColor = AppColors.forChange(metrics.annualizedReturnRate);
 
     final totalDisplay = showKrw
         ? CurrencyFormatter.format(metrics.totalValue, 'KRW')
@@ -761,9 +865,7 @@ class _MetricsCard extends ConsumerWidget {
           ? CurrencyFormatter.formatKrw(amt.abs())
           : CurrencyFormatter.formatUsd(amt.abs() / rate);
       dailyChangeText = '$amtSign$amtStr ($sign${pct.toStringAsFixed(2)}%)';
-      dailyChangeColor = pct > 0
-          ? AppColors.negative
-          : (pct < 0 ? const Color(0xFF1565C0) : Colors.grey);
+      dailyChangeColor = AppColors.forChange(pct);
     }
 
     final accountType = ref.watch(accountTypeNotifierProvider
@@ -953,8 +1055,7 @@ class _AssetListTile extends ConsumerWidget {
         final pct = priceChange.changePercent!;
         final sign = pct >= 0 ? '+' : '';
         changeText = '$sign${pct.toStringAsFixed(2)}%';
-        changeColor =
-            pct > 0 ? AppColors.negative : (pct < 0 ? const Color(0xFF1565C0) : Colors.grey);
+        changeColor = AppColors.forChange(pct);
       }
     } else if (asset?.lastPrice != null) {
       final lp = asset!.lastPrice!;
@@ -1227,11 +1328,40 @@ class _InvestmentTile extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  CurrencyFormatter.formatKrw(investment.amount),
-                  style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w500),
-                ),
+                Builder(builder: (_) {
+                  final isWithdrawal = investment.amount < 0;
+                  return Row(
+                    children: [
+                      if (isWithdrawal)
+                        Container(
+                          margin: const EdgeInsets.only(right: 6),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 5, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: AppColors.negative.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            '출금',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.negative,
+                            ),
+                          ),
+                        ),
+                      Text(
+                        '${isWithdrawal ? '-' : ''}'
+                        '${CurrencyFormatter.formatKrw(investment.amount.abs())}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: isWithdrawal ? AppColors.negative : null,
+                        ),
+                      ),
+                    ],
+                  );
+                }),
                 if (investment.memo != null && investment.memo!.isNotEmpty)
                   Text(
                     investment.memo!,
@@ -1306,15 +1436,20 @@ class _InvestmentFormDialogState
   late final TextEditingController _memoCtrl;
   late DateTime _date;
 
+  /// 출금(회수)이면 true — 저장할 때 금액을 음수로 넣는다.
+  bool _isWithdrawal = false;
+
   bool get _isEditing => widget.existing != null;
 
   @override
   void initState() {
     super.initState();
     final e = widget.existing;
+    // 기존 기록이 음수면 출금으로 열고, 입력란에는 절댓값을 보여준다.
+    _isWithdrawal = e != null && e.amount < 0;
     _amountCtrl = TextEditingController(
       text: e != null
-          ? _ThousandsSeparatorInputFormatter.format(e.amount.toInt())
+          ? _ThousandsSeparatorInputFormatter.format(e.amount.abs().toInt())
           : '',
     );
     _memoCtrl = TextEditingController(text: e?.memo ?? '');
@@ -1339,6 +1474,25 @@ class _InvestmentFormDialogState
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // 입금 / 출금
+            SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(
+                  value: false,
+                  label: Text('입금'),
+                  icon: Icon(Icons.add, size: 18),
+                ),
+                ButtonSegment(
+                  value: true,
+                  label: Text('출금'),
+                  icon: Icon(Icons.remove, size: 18),
+                ),
+              ],
+              selected: {_isWithdrawal},
+              onSelectionChanged: (s) =>
+                  setState(() => _isWithdrawal = s.first),
+            ),
+            const SizedBox(height: 8),
             // Date
             ListTile(
               contentPadding: EdgeInsets.zero,
@@ -1359,10 +1513,13 @@ class _InvestmentFormDialogState
             // Amount
             TextField(
               controller: _amountCtrl,
-              decoration: const InputDecoration(
-                labelText: '투자 금액 (원)',
+              decoration: InputDecoration(
+                labelText: _isWithdrawal ? '출금 금액 (원)' : '투자 금액 (원)',
                 hintText: '예: 1,000,000',
                 suffixText: '원',
+                helperText: _isWithdrawal
+                    ? '총 투자금에서 빠집니다'
+                    : null,
               ),
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: false),
@@ -1394,13 +1551,15 @@ class _InvestmentFormDialogState
 
   Future<void> _save() async {
     final rawText = _amountCtrl.text.replaceAll(',', '');
-    final amount = double.tryParse(rawText);
-    if (amount == null || amount <= 0) {
+    final entered = double.tryParse(rawText);
+    if (entered == null || entered <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('유효한 금액을 입력하세요')),
       );
       return;
     }
+    // 출금은 음수로 저장해 총 투자금에서 그대로 차감되게 한다.
+    final amount = _isWithdrawal ? -entered : entered;
 
     final memo = _memoCtrl.text.isEmpty ? null : _memoCtrl.text;
     final actions = ref.read(investmentActionsProvider);
@@ -1851,7 +2010,7 @@ class _RiskAnalysisSheetState extends ConsumerState<_RiskAnalysisSheet> {
                             label: 'MDD',
                             value:
                                 '${(risk.mdd * 100).toStringAsFixed(2)}%',
-                            color: AppColors.negative,
+                            color: AppColors.down,
                             description: '최대 낙폭',
                           ),
                         ),

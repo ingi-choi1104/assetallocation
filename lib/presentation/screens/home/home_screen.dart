@@ -19,6 +19,9 @@ import '../../widgets/tutorial_overlay.dart';
 import '../settings/settings_screen.dart';
 import '../dividend/dividend_screen.dart';
 import '../tax/tax_screen.dart';
+import '../trend/trend_screen.dart';
+import '../../providers/auth_providers.dart';
+import '../../providers/asset_trend_providers.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -61,6 +64,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       label: '세금',
     ),
     const NavigationDestination(
+      icon: Icon(Icons.show_chart_outlined, color: Color(0xFF1565C0)),
+      selectedIcon: Icon(Icons.show_chart, color: Color(0xFF1565C0)),
+      label: '추이',
+    ),
+    const NavigationDestination(
       icon: Icon(Icons.settings_outlined, color: Color(0xFF757575)),
       selectedIcon: Icon(Icons.settings, color: Color(0xFF757575)),
       label: '설정',
@@ -88,6 +96,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           _PortfolioListTab(tutorialKeys: _tutorialKeys),
           const DividendScreen(),
           const TaxScreen(),
+          const TrendScreen(),
           SettingsScreen(
             onShowTutorial: () => showTutorialOverlay(context, _tutorialKeys,
                 onTabSwitch: (tab) => setState(() => _selectedTab = tab)),
@@ -110,7 +119,7 @@ class _PortfolioListTab extends ConsumerWidget {
   final TutorialTargetKeys tutorialKeys;
   const _PortfolioListTab({required this.tutorialKeys});
 
-  Future<void> _showPortfolioTypeSheet(BuildContext context) async {
+Future<void> _showPortfolioTypeSheet(BuildContext context) async {
     // Await the sheet's result so the sheet is fully gone before we navigate.
     // Calling Navigator.pop + context.push synchronously causes a
     // '_dependents.isEmpty' assertion in Flutter's element lifecycle.
@@ -169,15 +178,40 @@ class _PortfolioListTab extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('자산배분 헬퍼'),
         actions: [
-          _CurrencyToggleChips(),
-          const SizedBox(width: 8),
+          // 로그인 아이콘
+          Consumer(builder: (context, ref, _) {
+            final userAsync = ref.watch(authStateProvider);
+            final user = userAsync.valueOrNull;
+            return IconButton(
+              icon: user != null
+                  ? CircleAvatar(
+                      radius: 12,
+                      backgroundImage: user.photoURL != null
+                          ? NetworkImage(user.photoURL!)
+                          : null,
+                      backgroundColor: Colors.white24,
+                      child: user.photoURL == null
+                          ? const Icon(Icons.person, size: 16, color: Colors.white)
+                          : null,
+                    )
+                  : const Icon(Icons.login),
+              tooltip: user != null ? user.displayName ?? '로그인됨' : '로그인',
+              onPressed: () => context.push('/settings'),
+            );
+          }),
+          // 계좌 가져오기 아이콘
+          IconButton(
+            icon: const Icon(Icons.account_balance_outlined),
+            tooltip: '계좌 가져오기',
+            onPressed: () => context.push('/kis-import'),
+          ),
           IconButton(
             key: tutorialKeys.cameraBtn,
             icon: const Icon(Icons.camera_alt_outlined),
             tooltip: '스냅샷',
             onPressed: () => context.push('/snapshots'),
           ),
-          IconButton(
+IconButton(
             key: tutorialKeys.sortBtn,
             icon: const Icon(Icons.sort),
             tooltip: '순서 편집',
@@ -302,12 +336,8 @@ class _GlobalSummaryCard extends ConsumerWidget {
       return const SizedBox.shrink();
     }
     final hasInvestments = m.totalInvested > 0;
-    final returnColor = m.returnRate >= 0
-        ? AppColors.positive
-        : AppColors.negative;
-    final annReturnColor = m.annualizedReturnRate >= 0
-        ? AppColors.positive
-        : AppColors.negative;
+    final returnColor = AppColors.forChange(m.returnRate);
+    final annReturnColor = AppColors.forChange(m.annualizedReturnRate);
 
     final valueDisplay = showKrw
         ? CurrencyFormatter.formatKrw(m.totalValue)
@@ -336,6 +366,8 @@ class _GlobalSummaryCard extends ConsumerWidget {
                     ),
                   ],
                   const Spacer(),
+                  _CurrencyToggleChips(compact: true),
+                  const SizedBox(width: 8),
                   Icon(Icons.chevron_right,
                       size: 18, color: Colors.grey.shade400),
                 ],
@@ -375,14 +407,90 @@ class _GlobalSummaryCard extends ConsumerWidget {
                         color: annReturnColor,
                       ),
                     ),
+                    const SizedBox(width: 16),
+                    const _CurrentDrawdownText(),
                   ],
                 ),
+                const _MddRow(),
               ],
               const SizedBox(height: 12),
               _AssetClassBar(ref: ref),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ── 전체 자산 MDD (최대 낙폭) ────────────────────────────────────────────────
+// 적립식이라 평가액으로는 낙폭을 잴 수 없다. 매수·매도 현금흐름을 제거한
+// TWR 지수 위에서 계산한 값을 쓴다 (AssetTrendService.drawdown).
+
+String _yyyyMm(DateTime d) => '${d.year}.${d.month.toString().padLeft(2, '0')}';
+
+/// 고점 대비 지금 얼마나 내려와 있는지 — 현재 낙폭(current drawdown).
+/// 고점에 있으면 낙폭이 0이므로 '최고점'으로 표시한다.
+class _CurrentDrawdownText extends ConsumerWidget {
+  const _CurrentDrawdownText();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final dd = ref.watch(assetDrawdownProvider).valueOrNull;
+    if (dd == null) return const SizedBox.shrink();
+
+    // 소수점 한 자리로 표시하므로 -0.0%로 반올림될 값은 최고점으로 본다.
+    final atPeak = dd.currentDrawdown > -0.0005;
+    return Text(
+      atPeak
+          ? '최고점'
+          : '현재 낙폭 ${CurrencyFormatter.formatPercent(dd.currentDrawdown * 100, decimals: 1)}',
+      style: TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        color: atPeak ? AppColors.positive : AppColors.down,
+      ),
+    );
+  }
+}
+
+/// 수익률 줄 아래에 MDD, 그 오른쪽에 기간·회복 정보.
+class _MddRow extends ConsumerWidget {
+  const _MddRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final dd = ref.watch(assetDrawdownProvider).valueOrNull;
+    if (dd == null || !dd.hasDrawdown) return const SizedBox.shrink();
+
+    final window = ref.watch(mddPeriodProvider).label;
+    final period = '${_yyyyMm(dd.peakDate!)}~${_yyyyMm(dd.troughDate!)}';
+    final recovery =
+        dd.recovered ? '회복 ${_yyyyMm(dd.recoveryDate!)}' : '미회복';
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            'MDD ${CurrencyFormatter.formatPercent(dd.maxDrawdown * 100, decimals: 1)}',
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.down,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '$window · $period · $recovery',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -513,9 +621,9 @@ class _EconomicIndicatorsSectionState
   bool _collapsed = false;
 
   static const _tabs = [
+    (label: '증시', cat: IndicatorCategory.stockIndex),
     (label: '환율', cat: IndicatorCategory.exchangeRate),
     (label: '현물', cat: IndicatorCategory.commodity),
-    (label: '증시', cat: IndicatorCategory.stockIndex),
   ];
 
   @override
@@ -677,11 +785,10 @@ class _IndicatorTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pct = indicator.changePercent;
-    final isPos = indicator.isPositive;
+    // 변동 색은 AppColors.forChange 한 곳에서만 결정한다.
     // 한국 증시 관행: 상승=빨간색, 하락=파란색
-    final changeColor = pct == null
-        ? Colors.grey.shade400
-        : (isPos ? AppColors.negative : const Color(0xFF1565C0));
+    final changeColor =
+        pct == null ? Colors.grey.shade400 : AppColors.forChange(pct);
 
     return Container(
       width: 88,
@@ -711,9 +818,12 @@ class _IndicatorTile extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(
+            // 화살표도 색과 같은 기준을 쓴다. isPositive는 0을 상승으로
+            // 보기 때문에 변동 없음일 때 ▲와 회색이 같이 나왔다.
             pct == null
                 ? '--'
-                : '${isPos ? "▲" : "▼"} ${pct.abs().toStringAsFixed(2)}%',
+                : '${pct > 0 ? "▲ " : pct < 0 ? "▼ " : ""}'
+                    '${pct.abs().toStringAsFixed(2)}%',
             style: TextStyle(
               fontSize: 10,
               color: changeColor,
@@ -820,11 +930,7 @@ class _PortfolioCard extends ConsumerWidget {
               : valueStr,
           style: TextStyle(
             fontSize: 12,
-            color: hasReturn
-                ? (m.returnRate >= 0
-                    ? AppColors.positive
-                    : AppColors.negative)
-                : null,
+            color: hasReturn ? AppColors.forChange(m.returnRate) : null,
           ),
         ),
         if (dailyChange != null)
@@ -857,10 +963,7 @@ class _DailyChangeText extends StatelessWidget {
   Widget build(BuildContext context) {
     final pct = change.percentChange;
     final amt = change.amountChange;
-    // + → red (상승), - → blue (하락)
-    final color = pct > 0
-        ? AppColors.negative
-        : (pct < 0 ? const Color(0xFF1565C0) : Colors.grey);
+    final color = AppColors.forChange(pct);
     final sign = pct >= 0 ? '+' : '';
 
     final amtStr = showKrw
@@ -879,8 +982,12 @@ class _DailyChangeText extends StatelessWidget {
   }
 }
 
-// ── 통화 전환 칩 (AppBar용) ─────────────────────────────────────────────────
+// ── 통화 전환 칩 ────────────────────────────────────────────────────────────
 class _CurrencyToggleChips extends ConsumerWidget {
+  /// compact=true : 카드 내부용 (어두운 배경 없음)
+  final bool compact;
+  const _CurrencyToggleChips({this.compact = false});
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final showKrw = ref.watch(showKrwProvider);
@@ -891,12 +998,14 @@ class _CurrencyToggleChips extends ConsumerWidget {
         _SmallChip(
           label: 'USD',
           selected: !showKrw,
+          compact: compact,
           onTap: () => ref.read(showKrwProvider.notifier).toggle(false),
         ),
         const SizedBox(width: 4),
         _SmallChip(
           label: 'KRW',
           selected: showKrw,
+          compact: compact,
           onTap: () => ref.read(showKrwProvider.notifier).toggle(true),
         ),
       ],
@@ -907,30 +1016,44 @@ class _CurrencyToggleChips extends ConsumerWidget {
 class _SmallChip extends StatelessWidget {
   final String label;
   final bool selected;
+  final bool compact;
   final VoidCallback onTap;
 
   const _SmallChip({
     required this.label,
     required this.selected,
     required this.onTap,
+    this.compact = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // compact 모드: 카드 위 → 테마 컬러 기반
+    final selectedBg = compact
+        ? AppColors.primary.withValues(alpha: 0.12)
+        : Colors.white.withValues(alpha: 0.25);
+    final selectedBorder = compact
+        ? AppColors.primary.withValues(alpha: 0.5)
+        : Colors.white.withValues(alpha: 0.6);
+    final unselectedBorder = compact
+        ? Colors.grey.withValues(alpha: 0.35)
+        : Colors.white.withValues(alpha: 0.3);
+    final selectedText = compact ? AppColors.primary : Colors.white;
+    final unselectedText = compact
+        ? (isDark ? Colors.grey.shade400 : Colors.grey.shade600)
+        : Colors.white.withValues(alpha: 0.6);
+
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         decoration: BoxDecoration(
-          color: selected
-              ? Colors.white.withValues(alpha: 0.25)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
+          color: selected ? selectedBg : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: selected
-                ? Colors.white.withValues(alpha: 0.6)
-                : Colors.white.withValues(alpha: 0.3),
+            color: selected ? selectedBorder : unselectedBorder,
           ),
         ),
         child: Text(
@@ -938,9 +1061,7 @@ class _SmallChip extends StatelessWidget {
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
-            color: selected
-                ? Colors.white
-                : Colors.white.withValues(alpha: 0.6),
+            color: selected ? selectedText : unselectedText,
           ),
         ),
       ),
@@ -1525,8 +1646,7 @@ class _BundleSubtitle extends StatelessWidget {
           style: const TextStyle(fontSize: 12));
     }
     final returnRate = (totalValue - totalInvested) / totalInvested;
-    final color =
-        returnRate >= 0 ? AppColors.positive : AppColors.negative;
+    final color = AppColors.forChange(returnRate);
     return Text(
       '$valueStr  ${CurrencyFormatter.formatSignedPercent(returnRate * 100)}',
       style: TextStyle(
